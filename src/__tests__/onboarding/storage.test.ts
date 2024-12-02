@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { saveUserProgress, loadUserProgress } from '../../utils/onboardingStorage';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { saveUserProgress, loadUserProgress } from '../../utils/onboarding/progressStorage';
 import { UserProgress, Response } from '../../types/onboarding';
+import { storageMock } from '../../setupTests';
 
 describe('Response Storage', () => {
   beforeEach(() => {
-    localStorage.clear();
+    vi.clearAllMocks();
   });
 
   const mockProgress: UserProgress = {
@@ -32,8 +33,10 @@ describe('Response Storage', () => {
       timestamp: new Date().toISOString()
     };
 
-    mockProgress.responses.push(textResponse);
+    mockProgress.responses = [textResponse];
+    
     saveUserProgress(mockProgress);
+    storageMock.getItem.mockReturnValue(JSON.stringify(mockProgress));
 
     const loaded = loadUserProgress('user-1', 'flow-1');
     expect(loaded?.responses[0].value).toBe('test answer');
@@ -46,8 +49,10 @@ describe('Response Storage', () => {
       timestamp: new Date().toISOString()
     };
 
-    mockProgress.responses.push(mcResponse);
+    mockProgress.responses = [mcResponse];
+    
     saveUserProgress(mockProgress);
+    storageMock.getItem.mockReturnValue(JSON.stringify(mockProgress));
 
     const loaded = loadUserProgress('user-1', 'flow-1');
     expect(loaded?.responses[0].value).toEqual(['option1', 'option2']);
@@ -60,8 +65,10 @@ describe('Response Storage', () => {
       timestamp: new Date().toISOString()
     };
 
-    mockProgress.responses.push(sliderResponse);
+    mockProgress.responses = [sliderResponse];
+    
     saveUserProgress(mockProgress);
+    storageMock.getItem.mockReturnValue(JSON.stringify(mockProgress));
 
     const loaded = loadUserProgress('user-1', 'flow-1');
     expect(loaded?.responses[0].value).toBe(5);
@@ -69,8 +76,9 @@ describe('Response Storage', () => {
 
   it('resumes from last completed section', () => {
     saveUserProgress(mockProgress);
-    const loaded = loadUserProgress('user-1', 'flow-1');
+    storageMock.getItem.mockReturnValue(JSON.stringify(mockProgress));
     
+    const loaded = loadUserProgress('user-1', 'flow-1');
     expect(loaded?.progress.currentSectionId).toBe('section-2');
     expect(loaded?.progress.completedSections).toContain('section-1');
   });

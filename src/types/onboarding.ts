@@ -1,78 +1,73 @@
 import { z } from 'zod';
-import {
-  baseQuestionSchema,
-  baseSectionSchema,
-  baseSettingsSchema,
-  metadataSchema
-} from './common';
 
-// Extend base schemas with onboarding-specific fields
-export const onboardingQuestionSchema = baseQuestionSchema;
-
-export const onboardingSectionSchema = baseSectionSchema;
-
-export const onboardingSettingsSchema = baseSettingsSchema.extend({
-  requireAllSections: z.boolean().default(true),
-  completionRedirect: z.string().optional()
+// Base schemas
+export const sectionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  order: z.number(),
+  isOptional: z.boolean(),
+  questions: z.array(z.object({
+    id: z.string(),
+    type: z.enum(['text', 'choice', 'multiChoice']),
+    text: z.string(),
+    required: z.boolean(),
+    options: z.array(z.string()).optional(),
+  })),
 });
 
-// Complete onboarding flow schema
 export const onboardingFlowSchema = z.object({
   id: z.string(),
   title: z.string(),
   description: z.string(),
-  version: z.string(),
   type: z.literal('onboarding'),
-  isDefault: z.boolean().default(false),
+  status: z.enum(['draft', 'published', 'archived']),
+  isDefault: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
-  status: z.enum(['draft', 'published', 'archived']).default('draft'),
-  sections: z.array(onboardingSectionSchema),
-  settings: onboardingSettingsSchema.default({
-    allowSkipSections: false,
-    showProgressBar: true,
-    shuffleSections: false,
-    requireAllSections: true,
-    completionMessage: "Thank you for completing the onboarding process!"
+  version: z.string(),
+  sections: z.array(sectionSchema),
+  settings: z.object({
+    allowSkipSections: z.boolean(),
+    requireAllSections: z.boolean(),
+    showProgressBar: z.boolean(),
+    allowSaveProgress: z.boolean(),
   }),
-  metadata: metadataSchema.optional()
+  metadata: z.object({
+    category: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    createdBy: z.string().optional(),
+    lastModifiedBy: z.string().optional(),
+  }).optional(),
 });
 
-// Progress tracking schema
-export const progressSchema = z.object({
-  completedSections: z.array(z.string()),
-  skippedSections: z.array(z.string()),
-  currentSectionId: z.string().optional(),
-  lastUpdated: z.string()
-});
-
-// Response schema
 export const responseSchema = z.object({
   questionId: z.string(),
-  value: z.union([z.string(), z.array(z.string()), z.number()]),
-  timestamp: z.string()
+  value: z.any(),
+  timestamp: z.string(),
 });
 
-// User progress schema
 export const userProgressSchema = z.object({
   userId: z.string(),
   flowId: z.string(),
-  progress: progressSchema,
+  progress: z.object({
+    completedSections: z.array(z.string()),
+    skippedSections: z.array(z.string()),
+    currentSectionId: z.string().optional(),
+    lastUpdated: z.string(),
+  }),
   responses: z.array(responseSchema),
   metadata: z.object({
     startedAt: z.string(),
     lastUpdated: z.string(),
     completedAt: z.string().optional(),
-    deviceInfo: z.string().optional(),
-    userAgent: z.string().optional()
-  })
+    deviceInfo: z.string(),
+    userAgent: z.string(),
+  }),
 });
 
-// Export types
-export type OnboardingQuestion = z.infer<typeof onboardingQuestionSchema>;
-export type OnboardingSection = z.infer<typeof onboardingSectionSchema>;
-export type OnboardingSettings = z.infer<typeof onboardingSettingsSchema>;
+// Type definitions
+export type Section = z.infer<typeof sectionSchema>;
 export type OnboardingFlow = z.infer<typeof onboardingFlowSchema>;
-export type Progress = z.infer<typeof progressSchema>;
-export type Response = z.infer<typeof responseSchema>;
 export type UserProgress = z.infer<typeof userProgressSchema>;
+export type Response = z.infer<typeof responseSchema>;

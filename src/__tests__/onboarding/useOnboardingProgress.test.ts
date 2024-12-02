@@ -1,27 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useOnboardingProgress } from '../../pages/UserOnboarding/hooks/useOnboardingProgress';
-import { saveUserProgress } from '../../utils/onboardingStorage';
+import { saveUserProgress } from '../../utils/onboarding/progressStorage';
 
-vi.mock('../../utils/onboardingStorage', () => ({
+vi.mock('../../utils/onboarding/progressStorage', () => ({
+  loadUserProgress: vi.fn(),
   saveUserProgress: vi.fn(),
-  createNewUserProgress: vi.fn(() => ({
-    userId: 'user-1',
-    flowId: 'test-flow',
-    progress: {
-      completedSections: [],
-      skippedSections: [],
-      currentSectionId: null,
-      lastUpdated: new Date().toISOString()
-    },
-    responses: [],
-    metadata: {
-      startedAt: new Date().toISOString(),
-      lastUpdated: new Date().toISOString(),
-      deviceInfo: 'test',
-      userAgent: 'test'
-    }
-  }))
 }));
 
 describe('useOnboardingProgress', () => {
@@ -31,82 +15,97 @@ describe('useOnboardingProgress', () => {
 
   it('initializes with empty responses and progress', () => {
     const { result } = renderHook(() => useOnboardingProgress('test-flow'));
-    
-    expect(result.current.responses).toEqual({});
+
     expect(result.current.progress.completedSections).toEqual([]);
     expect(result.current.progress.skippedSections).toEqual([]);
+    expect(result.current.responses).toEqual({});
   });
 
   it('handles question responses correctly', () => {
     const { result } = renderHook(() => useOnboardingProgress('test-flow'));
-    
+    const questionId = 'q1';
+
     act(() => {
-      result.current.handleResponse('q1', 'test answer');
+      result.current.handleResponse(questionId, 'test answer');
     });
 
-    expect(result.current.responses.q1.value).toBe('test answer');
-    expect(result.current.responses.q1.questionId).toBe('q1');
-    expect(result.current.responses.q1.timestamp).toBeDefined();
+    expect(Object.keys(result.current.responses)).toHaveLength(1);
+    expect(result.current.responses[questionId].value).toBe('test answer');
   });
 
   it('handles section skipping correctly', () => {
     const { result } = renderHook(() => useOnboardingProgress('test-flow'));
-    
+    const sectionId = 'section-2';
+
     act(() => {
-      result.current.handleSkipSection('section1');
+      result.current.skipSection(sectionId);
     });
 
-    expect(result.current.progress.skippedSections).toContain('section1');
+    expect(result.current.progress.skippedSections).toContain(sectionId);
   });
 
   it('validates section completion correctly', () => {
     const { result } = renderHook(() => useOnboardingProgress('test-flow'));
-    const mockSection = {
-      id: 'section1',
+    const section = {
+      id: 'section-1',
       title: 'Test Section',
-      description: 'Test Description',
+      description: 'Test description',
+      order: 1,
+      isOptional: false,
       questions: [
         {
           id: 'q1',
-          type: 'text',
-          text: 'Test Question',
-          validation: { required: true }
-        }
+          type: 'text' as const,
+          text: 'Required question',
+          required: true,
+        },
       ],
-      order: 0,
-      isOptional: false
     };
 
-    expect(result.current.isCurrentSectionValid(mockSection)).toBe(false);
+    expect(result.current.isCurrentSectionValid(section)).toBe(false);
 
     act(() => {
       result.current.handleResponse('q1', 'test answer');
     });
 
-    expect(result.current.isCurrentSectionValid(mockSection)).toBe(true);
+    expect(result.current.isCurrentSectionValid(section)).toBe(true);
   });
 
   it('saves progress on completion', async () => {
+    const mockSaveProgress = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(saveUserProgress).mockImplementation(mockSaveProgress);
+
     const { result } = renderHook(() => useOnboardingProgress('test-flow'));
-    
-    act(() => {
-      result.current.handleComplete();
+
+    await act(async () => {
+      result.current.handleResponse('q1', 'test answer');
+      result.current.completeSection('section-1');
+      result.current.skipSection('section-2');
+      await result.current.completeOnboarding();
     });
 
-    expect(saveUserProgress).toHaveBeenCalled();
-    const savedProgress = vi.mocked(saveUserProgress).mock.calls[0][0];
-    expect(savedProgress.metadata.completedAt).toBeDefined();
+    expect(mockSaveProgress).toHaveBeenCalled();
+    expect(result.current.saveStatus).toBe('saved');
   });
 
-  it('handles autosave correctly', () => {
+  it('handles autosave correctly', async () => {
     vi.useFakeTimers();
-    renderHook(() => useOnboardingProgress('test-flow'));
-    
+    const mockSaveProgress = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(saveUserProgress).mockImplementation(mockSaveProgress);
+
+    const { result } = renderHook(() => useOnboardingProgress('test-flow'));
+
     act(() => {
+      result.current.handleResponse('q1', 'test answer');
+    });
+
+    await act(async () => {
       vi.advanceTimersByTime(5000);
     });
 
-    expect(saveUserProgress).toHaveBeenCalled();
+    expect(mockSaveProgress).toHaveBeenCalled();
+    expect(result.current.saveStatus).toBe('saved');
+
     vi.useRealTimers();
   });
 });

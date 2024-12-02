@@ -1,83 +1,91 @@
 import React from 'react';
-import { Question, Response } from '../../../types/onboarding';
-import { cn } from '../../../utils/cn';
-import { shouldShowQuestion } from '../../../utils/conditionalLogic';
-import { TextQuestion } from './questions/TextQuestion';
-import { MultipleChoiceQuestion } from './questions/MultipleChoiceQuestion';
-import { SliderQuestion } from './questions/SliderQuestion';
-import { RankingQuestion } from './questions/RankingQuestion';
+import { Question } from '../../../types/onboarding';
 
 interface QuestionRendererProps {
   question: Question;
-  value: any;
+  value?: any;
   onChange: (value: any) => void;
-  responses: Record<string, Response>;
 }
 
 export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   question,
   value,
   onChange,
-  responses,
 }) => {
-  if (!shouldShowQuestion(question, responses)) {
-    return null;
-  }
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    onChange(event.target.value);
+  };
 
-  const renderQuestion = () => {
+  const renderInput = () => {
     switch (question.type) {
       case 'text':
-      case 'long_text':
         return (
-          <TextQuestion
-            question={question}
+          <input
+            type="text"
             value={value || ''}
-            onChange={onChange}
+            onChange={handleChange}
+            placeholder="Type your answer here..."
+            required={question.required}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         );
-      case 'multiple_choice':
+
+      case 'choice':
         return (
-          <MultipleChoiceQuestion
-            question={question}
+          <select
             value={value || ''}
-            onChange={onChange}
-          />
+            onChange={handleChange}
+            required={question.required}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Select an option</option>
+            {question.options?.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         );
-      case 'slider':
+
+      case 'multiChoice':
         return (
-          <SliderQuestion
-            question={question}
-            value={value || 0}
-            onChange={onChange}
-          />
+          <div className="space-y-2">
+            {question.options?.map((option) => {
+              const isSelected = Array.isArray(value) && value.includes(option);
+              return (
+                <label key={option} className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => {
+                      const newValue = Array.isArray(value) ? [...value] : [];
+                      if (isSelected) {
+                        onChange(newValue.filter((v) => v !== option));
+                      } else {
+                        onChange([...newValue, option]);
+                      }
+                    }}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span className="text-gray-700">{option}</span>
+                </label>
+              );
+            })}
+          </div>
         );
-      case 'ranking':
-        return (
-          <RankingQuestion
-            question={question}
-            value={value || []}
-            onChange={onChange}
-          />
-        );
+
       default:
         return null;
     }
   };
 
   return (
-    <div className="space-y-4" data-testid={`question-${question.id}`}>
-      <div className="flex items-start justify-between">
-        <label className="block text-lg font-medium text-gray-900" htmlFor={`question-${question.id}`}>
-          {question.text}
-          {question.validation.required && (
-            <span className="text-red-500 ml-1">*</span>
-          )}
-        </label>
-      </div>
-      {question.description && (
-        <p className="text-sm text-gray-600">{question.description}</p>
-      )}
-      {renderQuestion()}
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-gray-700">
+        {question.text}
+        {question.required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+      {renderInput()}
     </div>
   );
-};
+}; 

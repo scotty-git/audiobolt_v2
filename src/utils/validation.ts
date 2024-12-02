@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { onboardingFlowSchema } from '../schemas/onboarding';
+import { onboardingFlowSchema, questionSchema } from '../schemas/onboarding';
 
 export const emailSchema = z.string().email('Please enter a valid email address');
 
@@ -11,27 +11,53 @@ export const validateEmail = (email: string): { isValid: boolean; error?: string
   };
 };
 
-export const validateTemplate = (template: unknown) => {
+export type ValidationResult = {
+  success: boolean;
+  errors?: string[];
+};
+
+export const validateTemplate = (template: unknown): ValidationResult => {
   try {
-    return onboardingFlowSchema.safeParse(template);
+    const result = onboardingFlowSchema.safeParse(template);
+    if (!result.success) {
+      return {
+        success: false,
+        errors: result.error.errors.map(e => e.message),
+      };
+    }
+    return { success: true };
   } catch (error) {
-    console.error('Template validation error:', error);
-    return { success: false, error };
+    return {
+      success: false,
+      errors: ['Invalid template format'],
+    };
+  }
+};
+
+export const validateQuestion = (question: unknown): ValidationResult => {
+  try {
+    const result = questionSchema.safeParse(question);
+    if (!result.success) {
+      return {
+        success: false,
+        errors: result.error.errors.map(e => e.message),
+      };
+    }
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      errors: ['Invalid question format'],
+    };
   }
 };
 
 export const clearOnboardingData = () => {
-  // Get all localStorage keys
   const keys = Object.keys(localStorage);
-  
-  // Filter keys related to onboarding
   const onboardingKeys = keys.filter(key => 
     key.startsWith('onboarding_') || 
     key.startsWith('user_progress_')
   );
-  
-  // Remove onboarding-related data
   onboardingKeys.forEach(key => localStorage.removeItem(key));
-  
-  return onboardingKeys.length; // Return number of cleared items
+  return onboardingKeys.length;
 };

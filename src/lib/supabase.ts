@@ -1,8 +1,24 @@
 import { createClient } from '@supabase/supabase-js';
+import * as dotenv from 'dotenv';
 
-// These should be in your environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Load environment variables in Node.js environment
+if (typeof process !== 'undefined') {
+  dotenv.config();
+}
+
+// Get environment variables from either Vite or Node.js process
+const getEnvVar = (key: string): string => {
+  if (typeof process !== 'undefined' && process.env[key]) {
+    return process.env[key] as string;
+  }
+  if (typeof import.meta !== 'undefined' && import.meta.env[key]) {
+    return import.meta.env[key] as string;
+  }
+  throw new Error(`Missing environment variable: ${key}`);
+};
+
+const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');

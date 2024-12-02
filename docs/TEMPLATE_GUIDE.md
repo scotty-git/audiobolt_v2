@@ -1,21 +1,24 @@
 # Template Guide
 
-This guide explains how to create onboarding flows and questionnaires using our JSON template format.
+This guide explains how to create onboarding flows and questionnaires using our JSON template format with real-time saving capabilities.
 
 ## Template Structure
 
-Both onboarding flows and questionnaires follow a similar sectioned structure:
+Both onboarding flows and questionnaires follow a similar sectioned structure and are stored in Supabase:
 
 ```json
 {
-  "id": "unique-id",                    // Unique identifier
+  "id": "uuid",                         // Unique UUID
   "title": "Template Title",            // Display title
   "description": "Template Description", // Brief description
   "version": "1.0.0",                   // Semantic version
   "type": "questionnaire",              // "questionnaire" or "onboarding"
   "sections": [],                       // Array of sections
   "settings": {},                       // Template settings
-  "metadata": {}                        // Additional metadata
+  "metadata": {},                       // Additional metadata
+  "user_id": "uuid",                    // Owner's UUID
+  "created_at": "timestamp",            // Creation timestamp
+  "updated_at": "timestamp"             // Last update timestamp
 }
 ```
 
@@ -190,7 +193,8 @@ Additional template information:
 1. Navigate to Templates
 2. Click "Create New Onboarding Flow" or "Create New Questionnaire"
 3. Use the visual builder to create sections and questions
-4. Save your template
+4. Changes are automatically saved in real-time
+5. Template status is shown in the top-right corner
 
 ### Using JSON Import
 
@@ -199,9 +203,49 @@ Additional template information:
 3. Click "Import from JSON"
 4. Paste your JSON template
 5. Click "Import"
+6. Template will be validated and saved to Supabase
+
+## Real-time Collaboration
+
+Templates support real-time updates:
+
+1. **Auto-saving**
+   - All changes are saved automatically
+   - Progress is synced across devices
+   - Network status is shown in the UI
+
+2. **Version Control**
+   - Each save creates a new version
+   - Version history is maintained
+   - Ability to revert changes
+
+3. **Permissions**
+   - Templates can be private or shared
+   - Row Level Security controls access
+   - Published templates are read-only
 
 ## Example Templates
 
 See the following files for complete examples:
-- `/data/defaultOnboardingFlow.ts`
-- `/data/defaultQuestionnaires.ts`
+- `/data/templates/defaultOnboardingFlow.ts`
+- `/data/templates/defaultQuestionnaires.ts`
+
+## Best Practices
+
+1. **Template Management**
+   - Use descriptive titles
+   - Add proper metadata
+   - Set appropriate permissions
+   - Test before publishing
+
+2. **Real-time Features**
+   - Handle offline scenarios
+   - Implement conflict resolution
+   - Show sync status
+   - Cache responses
+
+3. **Security**
+   - Validate user permissions
+   - Sanitize user input
+   - Follow RLS policies
+   - Handle errors gracefully

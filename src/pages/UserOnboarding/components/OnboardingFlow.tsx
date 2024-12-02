@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { OnboardingFlow } from '../../types/onboarding';
-import { useOnboardingProgress } from './hooks/useOnboardingProgress';
-import { loadOnboardingFlow } from '../../utils/storage/supabaseStorage';
-import { DatabaseError } from '../../repositories/errors';
-import { LoadingSpinner, ErrorMessage } from '../../components/common';
-import { OnboardingSection, ProgressBar, NavigationButtons } from './components';
+import { useParams } from 'react-router-dom';
+import { OnboardingFlow as OnboardingFlowType } from '../../../types/onboarding';
+import { loadOnboardingFlow } from '../../../utils/onboarding/flowStorage';
+import { useOnboardingProgress } from '../hooks/useOnboardingProgress';
+import { LoadingSpinner, ErrorMessage } from '../../../components/common';
+import { OnboardingSection } from './OnboardingSection';
+import { ProgressBar } from './ProgressBar';
+import { NavigationButtons } from './NavigationButtons';
 
-export const UserOnboarding: React.FC = () => {
+export const OnboardingFlow: React.FC = () => {
   const { flowId } = useParams<{ flowId: string }>();
-  const navigate = useNavigate();
-  const [flow, setFlow] = useState<OnboardingFlow | null>(null);
+  const [flow, setFlow] = useState<OnboardingFlowType | null>(null);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,11 +55,7 @@ export const UserOnboarding: React.FC = () => {
         }
       } catch (error) {
         console.error('Error loading onboarding flow:', error);
-        if (error instanceof DatabaseError) {
-          setError(error.message);
-        } else {
-          setError('Failed to load onboarding flow');
-        }
+        setError('Failed to load onboarding flow');
       } finally {
         setIsLoading(false);
       }
@@ -86,7 +82,6 @@ export const UserOnboarding: React.FC = () => {
   const handleNext = async () => {
     if (isLastSection) {
       await handleComplete();
-      navigate('/onboarding/complete');
     } else {
       setCurrentSectionIndex(prev => prev + 1);
     }
@@ -99,10 +94,7 @@ export const UserOnboarding: React.FC = () => {
   const handleSkip = () => {
     if (currentSection.isOptional) {
       handleSkipSection(currentSection.id);
-      if (isLastSection) {
-        handleComplete();
-        navigate('/onboarding/complete');
-      } else {
+      if (!isLastSection) {
         setCurrentSectionIndex(prev => prev + 1);
       }
     }
@@ -141,4 +133,4 @@ export const UserOnboarding: React.FC = () => {
       />
     </div>
   );
-};
+}; 

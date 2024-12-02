@@ -1,48 +1,82 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { saveQuestionnaire, loadQuestionnaire, clearQuestionnaire } from '../utils/localStorage';
-import { QuestionnaireTemplate } from '../types/questionnaire';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { saveQuestionnaire, loadQuestionnaire, clearQuestionnaire } from '../utils/storage/localStorage';
+import { OnboardingFlow } from '../types/onboarding';
+
+// Mock localStorage
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+};
+
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+  writable: true,
+});
 
 describe('LocalStorage Utils', () => {
-  beforeEach(() => {
-    localStorage.clear();
-  });
-
-  const sampleQuestionnaire: QuestionnaireTemplate = {
+  const sampleQuestionnaire: OnboardingFlow = {
     id: '1',
     title: 'Test Questionnaire',
     description: 'Test Description',
-    questions: [
+    type: 'onboarding',
+    status: 'draft',
+    isDefault: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    version: '1.0.0',
+    sections: [
       {
         id: 'q1',
-        type: 'multiple-choice',
-        question: 'Test Question',
-        options: ['Option 1', 'Option 2'],
-        required: true
-      }
-    ]
+        title: 'Test Section',
+        description: 'Test Section Description',
+        order: 1,
+        isOptional: false,
+        questions: [
+          {
+            id: 'q1-1',
+            type: 'text',
+            text: 'Test Question',
+            required: true,
+          },
+        ],
+      },
+    ],
+    settings: {
+      allowSkipSections: false,
+      requireAllSections: true,
+      showProgressBar: true,
+      allowSaveProgress: true,
+    },
   };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   it('saves questionnaire to localStorage', () => {
     saveQuestionnaire(sampleQuestionnaire);
-    const stored = localStorage.getItem('questionnaire');
-    expect(stored).toBeDefined();
-    expect(JSON.parse(stored!)).toEqual(sampleQuestionnaire);
+    expect(localStorageMock.setItem).toHaveBeenCalledWith(
+      'questionnaire',
+      JSON.stringify(sampleQuestionnaire)
+    );
   });
 
   it('loads questionnaire from localStorage', () => {
-    localStorage.setItem('questionnaire', JSON.stringify(sampleQuestionnaire));
+    localStorageMock.getItem.mockReturnValue(JSON.stringify(sampleQuestionnaire));
     const loaded = loadQuestionnaire();
     expect(loaded).toEqual(sampleQuestionnaire);
   });
 
   it('returns null when no questionnaire exists', () => {
+    localStorageMock.getItem.mockReturnValue(null);
     const loaded = loadQuestionnaire();
     expect(loaded).toBeNull();
   });
 
   it('clears questionnaire from localStorage', () => {
-    saveQuestionnaire(sampleQuestionnaire);
     clearQuestionnaire();
-    expect(localStorage.getItem('questionnaire')).toBeNull();
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith('questionnaire');
   });
 });

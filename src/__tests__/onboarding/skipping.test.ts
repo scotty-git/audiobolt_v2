@@ -1,57 +1,91 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Section, UserProgress } from '../../types/onboarding';
-import { createNewUserProgress, saveUserProgress } from '../../utils/onboardingStorage';
+import { renderHook, act } from '@testing-library/react';
+import { useOnboardingProgress } from '../../pages/UserOnboarding/hooks/useOnboardingProgress';
+
+vi.mock('../../utils/onboarding/progressStorage', () => ({
+  loadUserProgress: vi.fn(),
+  saveUserProgress: vi.fn(),
+}));
 
 describe('Section and Question Skipping', () => {
-  const mockSection: Section = {
-    id: 'section-1',
-    title: 'Test Section',
-    description: 'Test Description',
-    order: 0,
+  const mockProgress = {
+    userId: 'test-user',
+    flowId: 'test-flow',
+    progress: {
+      completedSections: [],
+      skippedSections: [],
+      currentSectionId: undefined,
+      lastUpdated: new Date().toISOString(),
+    },
+    responses: [],
+    metadata: {
+      startedAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
+    },
+  };
+
+  const optionalSection = {
+    id: 'section-2',
+    title: 'Optional Section',
+    description: 'This section can be skipped',
+    order: 2,
     isOptional: true,
     questions: [
       {
-        id: 'q1',
-        type: 'text',
-        text: 'Question 1',
-        validation: { required: false }
-      }
-    ]
+        id: 'q2',
+        type: 'text' as const,
+        text: 'Optional question',
+        required: false,
+      },
+    ],
   };
 
   it('allows skipping optional sections', () => {
-    const progress = createNewUserProgress('user-1', 'flow-1');
-    progress.progress.skippedSections.push(mockSection.id);
-    
-    expect(progress.progress.skippedSections).toContain(mockSection.id);
-    expect(progress.progress.completedSections).not.toContain(mockSection.id);
+    const { result } = renderHook(() => useOnboardingProgress('test-flow'));
+
+    act(() => {
+      result.current.skipSection(optionalSection.id, optionalSection);
+    });
+
+    expect(result.current.progress.skippedSections).toContain(optionalSection.id);
   });
 
   it('tracks skipped questions as undefined in responses', () => {
-    const progress = createNewUserProgress('user-1', 'flow-1');
-    expect(progress.responses[mockSection.questions[0].id]).toBeUndefined();
+    const { result } = renderHook(() => useOnboardingProgress('test-flow'));
+
+    act(() => {
+      result.current.skipSection(optionalSection.id, optionalSection);
+    });
+
+    const questionId = optionalSection.questions[0].id;
+    expect(result.current.responses[questionId]).toBeUndefined();
   });
 
   it('updates progress when skipping sections', () => {
-    const progress = createNewUserProgress('user-1', 'flow-1');
-    progress.progress.skippedSections.push(mockSection.id);
-    progress.progress.lastUpdated = new Date().toISOString();
+    const { result } = renderHook(() => useOnboardingProgress('test-flow'));
 
-    expect(progress.progress.lastUpdated).toBeDefined();
-    expect(progress.progress.skippedSections.length).toBe(1);
+    act(() => {
+      result.current.skipSection(optionalSection.id, optionalSection);
+    });
+
+    expect(result.current.progress.skippedSections).toHaveLength(1);
+    expect(result.current.progress.lastUpdated).toBeDefined();
   });
 
   it('prevents skipping required sections', () => {
-    const requiredSection: Section = {
-      ...mockSection,
-      isOptional: false
+    const requiredSection = {
+      ...optionalSection,
+      isOptional: false,
     };
 
-    const progress = createNewUserProgress('user-1', 'flow-1');
-    
-    // Attempt to skip required section should throw
+    const { result } = renderHook(() => useOnboardingProgress('test-flow'));
+
     expect(() => {
-      progress.progress.skippedSections.push(requiredSection.id);
-    }).toThrow();
+      act(() => {
+        result.current.skipSection(requiredSection.id, requiredSection);
+      });
+    }).not.toThrow();
+
+    expect(result.current.progress.skippedSections).not.toContain(requiredSection.id);
   });
 });

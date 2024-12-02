@@ -1,59 +1,17 @@
-# Template Management System
+# Audiobook Questionnaire Builder
 
-A comprehensive React application for managing onboarding flows and questionnaires. Built with React, TypeScript, and Tailwind CSS.
+A modern web application for creating and managing audiobook questionnaires and onboarding flows.
 
 ## Features
 
-### Template Management
-- Create and manage templates
-- Multi-select and bulk operations
-- Advanced filtering and search
-- Default template management
-- Mobile-responsive interface
+- Create and manage questionnaire templates
+- Build custom onboarding flows
+- Real-time autosave
+- Progress tracking
+- Responsive design
+- Type-safe development
 
-### Core Functionality
-- Template CRUD operations
-- Status management (draft/published/archived)
-- Bulk actions (delete, status update)
-- Search and advanced filtering
-- Mobile-optimized views
-
-### User Interface
-- Clean, modern design
-- Responsive layout
-- Touch-friendly controls
-- Intuitive navigation
-- Real-time feedback
-
-## Quick Start
-
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Run tests
-npm test
-
-# Build for production
-npm run build
-```
-
-## Project Structure
-
-```
-src/
-├── components/        # Reusable UI components
-├── hooks/            # Custom React hooks
-├── pages/            # Main application views
-├── utils/            # Helper functions
-├── db/               # Database logic
-└── types/            # TypeScript definitions
-```
-
-## Technology Stack
+## Tech Stack
 
 ### Core
 - React 18
@@ -61,17 +19,18 @@ src/
 - Tailwind CSS 3
 - Vite 5
 
-### Database
-- IndexedDB
-- Repository pattern
-- Zod validation
-- localStorage fallback
+### Database & Storage
+- Supabase (Real-time Database)
+- PostgreSQL with Row Level Security (RLS)
+- Real-time subscriptions
+- Type-safe database access
+- Optimized caching layer
 
 ### State Management
 - React hooks
 - Context API
 - Custom hooks
-- Local storage
+- Supabase real-time subscriptions
 
 ### UI Components
 - Tailwind CSS
@@ -84,6 +43,17 @@ src/
 ### Prerequisites
 - Node.js 18+
 - npm 8+
+- Supabase account and project
+
+### Environment Setup
+1. Create a `.env` file in the root directory
+2. Add your Supabase credentials:
+
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_anon_key
+VITE_SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+```
 
 ### Available Scripts
 
@@ -102,6 +72,12 @@ npm run coverage   # Generate coverage report
 npm run lint       # Run ESLint
 npm run type-check # Run TypeScript checks
 npm run format     # Format code
+
+# Database
+npm run db:migrate     # Run Supabase migrations
+npm run db:reset      # Reset database to initial state
+npm run db:seed       # Seed database with test data
+npm run db:verify     # Verify database integrity
 ```
 
 ### Testing
@@ -117,21 +93,16 @@ npm run format     # Format code
 - Responsive design
 - Accessibility
 - Error handling
+- Row Level Security (RLS)
+- Real-time data synchronization
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-### Guidelines
-- Follow TypeScript best practices
-- Write tests for new features
-- Update documentation
-- Follow existing code style
-- Use meaningful commit messages
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
 ## License
 

@@ -14,13 +14,14 @@
     "test:coverage": "vitest run --coverage",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "type-check": "tsc --noEmit",
-    "cleanup": "tsx scripts/cleanup.ts"
+    "cleanup": "tsx scripts/cleanup.ts",
+    "migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.4",
-    "@supabase/supabase-js": "^2.46.2",
+    "@supabase/supabase-js": "^2.39.7",
     "clsx": "^2.1.0",
-    "idb": "^8.0.0",
+    "dotenv": "^16.4.5",
     "lucide-react": "^0.344.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -47,7 +48,6 @@
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
-    "fake-indexeddb": "^5.0.2",
     "happy-dom": "^13.6.2",
     "postcss": "^8.4.35",
     "prettier": "^3.2.5",

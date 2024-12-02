@@ -1,26 +1,24 @@
-import { supabase, Template } from '../lib/supabase';
-import { v4 as uuidv4 } from 'uuid';
+import { supabase } from '../lib/supabase';
+import { Template } from '../types/onboarding';
+import { DatabaseError } from './errors';
 
 export const templateRepository = {
   async create(template: Omit<Template, 'id' | 'created_at' | 'updated_at'>): Promise<Template> {
-    const id = uuidv4();
-    const now = new Date().toISOString();
-    
-    const newTemplate = {
-      id,
-      ...template,
-      created_at: now,
-      updated_at: now,
-    };
-
     const { data, error } = await supabase
       .from('templates')
-      .insert(newTemplate)
+      .insert(template)
       .select()
       .single();
 
-    if (error) throw error;
-    return data;
+    if (error) {
+      throw new DatabaseError('Failed to create template', error);
+    }
+
+    if (!data) {
+      throw new DatabaseError('Failed to create template: No data returned');
+    }
+
+    return data as Template;
   },
 
   async findById(id: string): Promise<Template | null> {
@@ -30,8 +28,11 @@ export const templateRepository = {
       .eq('id', id)
       .single();
 
-    if (error) throw error;
-    return data;
+    if (error) {
+      throw new DatabaseError('Failed to fetch template', error);
+    }
+
+    return data as Template | null;
   },
 
   async findByType(type: Template['type']): Promise<Template[]> {
@@ -40,17 +41,11 @@ export const templateRepository = {
       .select()
       .eq('type', type);
 
-    if (error) throw error;
-    return data;
-  },
+    if (error) {
+      throw new DatabaseError('Failed to fetch templates', error);
+    }
 
-  async findAll(): Promise<Template[]> {
-    const { data, error } = await supabase
-      .from('templates')
-      .select();
-
-    if (error) throw error;
-    return data;
+    return (data || []) as Template[];
   },
 
   async update(id: string, template: Partial<Template>): Promise<Template> {
@@ -64,44 +59,14 @@ export const templateRepository = {
       .select()
       .single();
 
-    if (error) throw error;
-    return data;
-  },
-
-  async delete(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('templates')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
-  },
-
-  async getDefaultTemplate(type: Template['type']): Promise<Template | null> {
-    const { data, error } = await supabase
-      .from('templates')
-      .select()
-      .eq('type', type)
-      .eq('is_default', true)
-      .single();
-
-    if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "no rows returned"
-    return data;
-  },
-
-  async setDefault(id: string): Promise<Template> {
-    const template = await this.findById(id);
-    if (!template) {
-      throw new Error('Template not found');
+    if (error) {
+      throw new DatabaseError('Failed to update template', error);
     }
 
-    // Start a transaction using RPC (you'll need to create this function in Supabase)
-    const { data, error } = await supabase.rpc('set_default_template', {
-      template_id: id,
-      template_type: template.type
-    });
+    if (!data) {
+      throw new DatabaseError(`Template with id ${id} not found`);
+    }
 
-    if (error) throw error;
-    return data;
-  }
+    return data as Template;
+  },
 }; 
