@@ -10,6 +10,7 @@ import { QuestionnaireSelection } from './pages/QuestionnaireSelection/Questionn
 import { SubmissionsPage } from './pages/SubmissionsPage';
 import { TemplateManagementPage } from './pages/TemplateManagementPage/TemplateManagementPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ResetTemplate } from './pages/ResetTemplate';
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
             </Route>
             <Route path="submissions" element={<SubmissionsPage />} />
             <Route path="templates" element={<TemplateManagementPage />} />
+            <Route path="reset-template" element={<ResetTemplate />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

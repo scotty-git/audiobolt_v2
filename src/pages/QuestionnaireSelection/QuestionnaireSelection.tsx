@@ -88,4 +88,3 @@ export const QuestionnaireSelection: React.FC = () => {
       </div>
     </div>
   );
-};

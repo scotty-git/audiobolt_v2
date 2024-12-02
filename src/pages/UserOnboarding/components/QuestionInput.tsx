@@ -1,12 +1,5 @@
 import React from 'react';
-
-interface Question {
-  id: string;
-  type: 'text' | 'choice' | 'multiChoice';
-  text: string;
-  required: boolean;
-  options?: string[];
-}
+import { Question } from '../../../types';
 
 interface QuestionInputProps {
   question: Question;
@@ -22,55 +15,89 @@ export const QuestionInput: React.FC<QuestionInputProps> = ({
   const renderInput = () => {
     switch (question.type) {
       case 'text':
+      case 'email':
         return (
           <input
             id={question.id}
-            type="text"
+            type={question.type}
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Type your answer here..."
-            required={question.required}
+            placeholder={question.placeholder || 'Type your answer here...'}
+            required={question.validation.required}
+          />
+        );
+
+      case 'number':
+        return (
+          <input
+            id={question.id}
+            type="number"
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            min={question.validation.minValue}
+            max={question.validation.maxValue}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder={question.placeholder || 'Enter a number...'}
+            required={question.validation.required}
           />
         );
       
-      case 'choice':
+      case 'select':
+        return (
+          <select
+            id={question.id}
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required={question.validation.required}
+          >
+            <option value="">Select an option...</option>
+            {question.options?.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        );
+      
+      case 'radio':
         return (
           <div className="space-y-2">
             {question.options?.map((option) => (
-              <label key={option} className="flex items-center space-x-3">
+              <label key={option.value} className="flex items-center space-x-3">
                 <input
-                  id={`${question.id}-${option}`}
+                  id={`${question.id}-${option.value}`}
                   type="radio"
                   name={question.id}
-                  value={option}
-                  checked={value === option}
+                  value={option.value}
+                  checked={value === option.value}
                   onChange={(e) => onChange(e.target.value)}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                  required={question.required}
+                  required={question.validation.required}
                 />
-                <span className="text-gray-700">{option}</span>
+                <span className="text-gray-700">{option.label}</span>
               </label>
             ))}
           </div>
         );
       
-      case 'multiChoice':
+      case 'checkbox':
         return (
           <div className="space-y-2">
             {question.options?.map((option) => (
-              <label key={option} className="flex items-center space-x-3">
+              <label key={option.value} className="flex items-center space-x-3">
                 <input
-                  id={`${question.id}-${option}`}
+                  id={`${question.id}-${option.value}`}
                   type="checkbox"
-                  value={option}
-                  checked={Array.isArray(value) && value.includes(option)}
+                  value={option.value}
+                  checked={Array.isArray(value) && value.includes(option.value)}
                   onChange={(e) => {
                     const newValue = Array.isArray(value) ? [...value] : [];
                     if (e.target.checked) {
-                      newValue.push(option);
+                      newValue.push(option.value);
                     } else {
-                      const index = newValue.indexOf(option);
+                      const index = newValue.indexOf(option.value);
                       if (index > -1) {
                         newValue.splice(index, 1);
                       }
@@ -79,7 +106,7 @@ export const QuestionInput: React.FC<QuestionInputProps> = ({
                   }}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500"
                 />
-                <span className="text-gray-700">{option}</span>
+                <span className="text-gray-700">{option.label}</span>
               </label>
             ))}
           </div>
@@ -94,7 +121,7 @@ export const QuestionInput: React.FC<QuestionInputProps> = ({
     <div className="space-y-2">
       <label htmlFor={question.id} className="block text-sm font-medium text-gray-700">
         {question.text}
-        {question.required && <span className="text-red-500 ml-1">*</span>}
+        {question.validation.required && <span className="text-red-500 ml-1">*</span>}
       </label>
       {renderInput()}
     </div>

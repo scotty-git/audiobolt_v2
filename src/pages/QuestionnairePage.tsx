@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { templateRepository } from '../db/repositories';
-import { validateResponse, saveQuestionnaireResponse } from '../utils/questionnaire';
+import { templateRepository, responseRepository } from '../db/repositories';
+import { saveQuestionnaireResponse } from '../utils/questionnaire';
 import { LoadingSpinner } from '../components/feedback/LoadingSpinner';
 import { SectionProgress } from '../components/Questionnaire/SectionProgress';
 import { SectionRenderer } from '../components/Questionnaire/SectionRenderer';
 import { SubmissionConfirmation } from '../components/Questionnaire/SubmissionConfirmation';
 import { v4 as uuidv4 } from 'uuid';
+import { Template, Section, Question, Response } from '../types';
 
 export const QuestionnairePage: React.FC = () => {
   const { templateId } = useParams();
   const navigate = useNavigate();
-  const [template, setTemplate] = useState<any>(null);
+  const [template, setTemplate] = useState<Template | null>(null);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [completedSections, setCompletedSections] = useState<string[]>([]);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
@@ -27,11 +28,44 @@ export const QuestionnairePage: React.FC = () => {
         if (!templateId) return;
         const loadedTemplate = await templateRepository.findById(templateId);
         if (loadedTemplate) {
-          const parsedContent = JSON.parse(loadedTemplate.content);
+          const parsedContent = typeof loadedTemplate.content === 'string' 
+            ? JSON.parse(loadedTemplate.content)
+            : loadedTemplate.content;
+            
+          console.log('Loaded template content:', parsedContent);
+            
           setTemplate({
-            ...parsedContent,
-            id: loadedTemplate.id,
-            title: loadedTemplate.title
+            ...loadedTemplate,
+            sections: (parsedContent.sections || []).map((section: Partial<Section>, index: number) => ({
+              id: section.id || uuidv4(),
+              title: section.title || '',
+              description: section.description || '',
+              order: index + 1,
+              isOptional: section.isOptional || false,
+              questions: (section.questions || []).map((q: Partial<Question>) => {
+                console.log('Processing question:', q);
+                return {
+                  id: q.id || uuidv4(),
+                  text: q.text || '',
+                  type: q.type || 'text',
+                  validation: {
+                    required: q.required || q.validation?.required || false,
+                    minLength: q.validation?.minLength,
+                    maxLength: q.validation?.maxLength,
+                    minValue: q.validation?.minValue,
+                    maxValue: q.validation?.maxValue,
+                    step: q.validation?.step,
+                    minSelected: q.validation?.minSelected
+                  },
+                  placeholder: q.placeholder,
+                  description: q.description,
+                  options: q.options?.map(opt => ({
+                    label: opt.label || opt.text || '',
+                    value: opt.value || opt.id || ''
+                  }))
+                };
+              })
+            }))
           });
         }
       } catch (error) {
@@ -55,12 +89,14 @@ export const QuestionnairePage: React.FC = () => {
     }));
   };
 
-  const validateSection = (sectionIndex: number) => {
+  const validateSection = (sectionIndex: number): boolean => {
+    if (!template) return false;
+    
     const section = template.sections[sectionIndex];
     const sectionErrors: Record<string, string> = {};
     let isValid = true;
 
-    section.questions.forEach(question => {
+    section.questions.forEach((question: Question) => {
       if (question.validation?.required && !answers[question.id]) {
         sectionErrors[question.id] = 'This question is required';
         isValid = false;
@@ -73,6 +109,7 @@ export const QuestionnairePage: React.FC = () => {
 
   const handleNext = () => {
     if (!validateSection(currentSectionIndex)) return;
+    if (!template) return;
 
     const currentSection = template.sections[currentSectionIndex];
     setCompletedSections(prev => [...prev, currentSection.id]);
@@ -94,19 +131,52 @@ export const QuestionnairePage: React.FC = () => {
     if (!template || !templateId) return;
 
     try {
-      await saveQuestionnaireResponse({
-        id: uuidv4(),
-        templateId,
-        templateTitle: template.title,
-        answers,
-        completedSections,
-        currentSectionIndex,
-        completedAt: new Date().toISOString()
-      });
+      console.log('Current answers state:', answers);
+      
+      const formattedAnswers = Object.entries(answers).reduce((acc, [key, value]) => {
+        if (Array.isArray(value)) {
+          acc[key] = value;
+        } else {
+          acc[key] = String(value);
+        }
+        return acc;
+      }, {} as Record<string, string | string[]>);
+
+      const response: Partial<Response> = {
+        template_id: templateId,
+        user_id: uuidv4(),
+        answers: formattedAnswers,
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        last_updated: new Date().toISOString(),
+        metadata: {
+          templateTitle: template.title,
+          templateType: template.type,
+          completedSections,
+          submittedAt: new Date().toISOString(),
+          questionCount: template.sections.reduce((acc: number, section) => acc + section.questions.length, 0),
+          answeredCount: Object.keys(answers).length
+        }
+      };
+
+      console.log('Attempting to save response:', response);
+      
+      const savedResponse = await saveQuestionnaireResponse(response);
+      console.log('Save response result:', savedResponse);
+
+      if (!savedResponse) {
+        throw new Error('Failed to save response');
+      }
+
       setShowConfirmation(true);
+      
+      setTimeout(() => {
+        navigate('/submissions');
+      }, 2000);
+
     } catch (error) {
-      console.error('Error saving response:', error);
-      alert('Failed to save your responses. Please try again.');
+      console.error('Error submitting questionnaire:', error);
+      alert('Failed to submit questionnaire. Please try again.');
     }
   };
 

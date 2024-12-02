@@ -4,221 +4,450 @@
 
 The application follows a modular architecture with clear separation of concerns, designed to handle both onboarding flows and questionnaires in a flexible, maintainable way. It leverages Supabase for real-time database capabilities and robust security.
 
+## Directory Structure
 ```
 src/
-├── components/        # Reusable UI components
-│   ├── common/       # Shared components (buttons, inputs, etc.)
-│   ├── feedback/     # Feedback components (loading, errors)
-│   ├── layout/       # Layout components
-│   └── templates/    # Template-specific components
-├── hooks/            # Custom React hooks
-├── pages/            # Main application views
-├── lib/             # Core libraries and utilities
-│   ├── supabase.ts  # Supabase client configuration
-│   ├── cache.ts     # Caching layer
-│   └── errors.ts    # Custom error types
-├── repositories/    # Data access layer
-│   ├── template.ts  # Template repository
-│   ├── response.ts  # Response repository
-│   └── progress.ts  # Progress repository
-├── types/           # TypeScript definitions
-└── utils/           # Helper functions
+├── components/           # Reusable UI components
+│   ├── common/          # Shared components
+│   ├── forms/           # Form-related components
+│   ├── flows/           # Flow-specific components
+│   │   ├── onboarding/  # Onboarding components
+│   │   └── questionnaire/ # Questionnaire components
+│   └── layout/          # Layout components
+├── hooks/               # Custom React hooks
+├── pages/               # Main application views
+├── lib/                 # Core libraries
+│   ├── supabase.ts     # Supabase client
+│   ├── validation.ts   # Validation utilities
+│   └── errors.ts       # Error handling
+├── types/              # TypeScript definitions
+└── utils/              # Helper functions
 ```
 
-## Core Components
+## Flow Architecture
 
-### Database Layer
-- Supabase real-time database
-- PostgreSQL with Row Level Security
-- Repository pattern for data access
-- Type-safe database operations
-- Real-time subscriptions
-- Optimized caching layer
+### Component Hierarchy
+```
+UserOnboarding
+├── SectionRenderer
+│   ├── QuestionRenderer
+│   │   ├── TextInput
+│   │   ├── MultipleChoice
+│   │   ├── Checkbox
+│   │   └── CustomInputs
+│   └── ValidationLayer
+└── SectionProgress
+    ├── ProgressBar
+    └── NavigationControls
+```
 
-### Template Management
-- Unified interface for managing templates
-- Multi-select functionality
-- Advanced filtering and search
-- Real-time updates
-- Progress tracking
+### Flow Components
+```typescript
+// Base Flow Component
+interface FlowProps {
+  template: Template;
+  onComplete: (data: FlowData) => void;
+  onError: (error: Error) => void;
+}
 
-### Security Layer
-- Row Level Security (RLS)
-- Supabase authentication
-- Secure environment variables
-- Type-safe database access
-- Input validation
-- Error boundaries
+// Onboarding Flow
+const OnboardingFlow: React.FC<FlowProps> = ({
+  template,
+  onComplete,
+  onError
+}) => {
+  const [state, setState] = useState<OnboardingState>(initialState);
+  
+  // Flow-specific logic
+  const handleSectionComplete = async (sectionId: string, data: any) => {
+    await saveProgress(sectionId, data);
+    proceedToNextSection();
+  };
+  
+  return (
+    <FlowErrorBoundary>
+      <SectionRenderer
+        section={currentSection}
+        onComplete={handleSectionComplete}
+        onSkip={handleSkipSection}
+      />
+    </FlowErrorBoundary>
+  );
+};
+
+// Questionnaire Flow
+const QuestionnaireFlow: React.FC<FlowProps> = ({
+  template,
+  onComplete,
+  onError
+}) => {
+  // Similar structure to OnboardingFlow but with
+  // questionnaire-specific logic
+};
+```
+
+### Form Components
+```typescript
+// Form Container
+interface FormContainerProps {
+  initialValues: Record<string, any>;
+  validationSchema: ValidationSchema;
+  onSubmit: (values: any) => Promise<void>;
+}
+
+// Question Types
+type QuestionType = 
+  | 'text'
+  | 'email'
+  | 'number'
+  | 'select'
+  | 'multiselect'
+  | 'checkbox'
+  | 'radio';
+
+// Question Component
+interface QuestionProps {
+  type: QuestionType;
+  value: any;
+  onChange: (value: any) => void;
+  validation?: ValidationRule[];
+}
+```
+
+### Navigation Components
+```typescript
+interface NavigationProps {
+  currentStep: number;
+  totalSteps: number;
+  onNext: () => void;
+  onBack: () => void;
+  canProceed: boolean;
+}
+
+const NavigationControls: React.FC<NavigationProps> = (props) => {
+  // Navigation logic
+};
+```
 
 ## State Management
 
-### Template State
+### Form State
 ```typescript
-interface Template {
-  id: string;
-  title: string;
-  type: 'onboarding' | 'questionnaire';
-  content: Record<string, unknown>;
-  is_default: boolean;
-  status: 'draft' | 'published' | 'archived';
-  created_at: string;
-  updated_at: string;
-  version: string;
-  category?: string;
-  tags?: string[];
-  user_id: string;
+interface FormState {
+  values: Record<string, any>;
+  errors: Record<string, string>;
+  touched: Record<string, boolean>;
+  isSubmitting: boolean;
 }
+
+const useFormState = (config: FormConfig) => {
+  const [state, setState] = useState<FormState>(initialState);
+  
+  // Form state management
+  const handleChange = (field: string, value: any) => {
+    setState(prev => ({
+      ...prev,
+      values: { ...prev.values, [field]: value }
+    }));
+  };
+  
+  return {
+    ...state,
+    handleChange,
+    handleBlur,
+    handleSubmit
+  };
+};
 ```
 
 ### Progress State
 ```typescript
-interface Progress {
-  id: string;
-  response_id: string;
-  user_id: string;
-  current_step: number;
-  total_steps: number;
-  last_updated: string;
+interface ProgressState {
+  currentStep: number;
+  completedSteps: string[];
+  skippedSteps: string[];
+  responses: Record<string, any>;
 }
+
+const useProgress = () => {
+  const [progress, setProgress] = useState<ProgressState>(initialProgress);
+  
+  // Progress tracking
+  const markStepComplete = (stepId: string) => {
+    setProgress(prev => ({
+      ...prev,
+      completedSteps: [...prev.completedSteps, stepId]
+    }));
+  };
+  
+  return {
+    progress,
+    markStepComplete,
+    markStepSkipped,
+    canProceed
+  };
+};
 ```
 
-## Component Patterns
+## Validation System
 
-### Shared Components
-- SelectableTable: Reusable table with multi-select
-- MultiSelectActions: Bulk action controls
-- DeleteConfirmationDialog: Reusable confirmation modal
-- FilterDropdown: Advanced filtering interface
+### Rules
+```typescript
+interface ValidationRule {
+  type: 'required' | 'pattern' | 'custom';
+  message: string;
+  validate: (value: any) => boolean;
+}
 
-### Mobile Optimization
-- Card-based layout for small screens
-- Touch-friendly controls
-- Responsive dropdowns and modals
-- Optimized spacing and typography
+const useValidation = (rules: ValidationRule[]) => {
+  const validate = (value: any) => {
+    for (const rule of rules) {
+      const isValid = rule.validate(value);
+      if (!isValid) {
+        return { isValid: false, message: rule.message };
+      }
+    }
+    return { isValid: true };
+  };
+  
+  return { validate };
+};
+```
+
+### Skip Section Logic
+```typescript
+const handleSkipSection = (sectionId: string) => {
+  if (!canSkipSection(sectionId)) return;
+  
+  markSectionSkipped(sectionId);
+  proceedToNextSection();
+};
+
+const canSkipSection = (sectionId: string): boolean => {
+  const section = sections.find(s => s.id === sectionId);
+  return section?.canSkip && !section?.isRequired;
+};
+```
+
+## Data Flow
+
+### Template Loading
+```typescript
+interface Template {
+  id: string;
+  type: 'onboarding' | 'questionnaire';
+  sections: Section[];
+  settings: TemplateSettings;
+}
+
+const useTemplate = (templateId: string) => {
+  const [template, setTemplate] = useState<Template | null>(null);
+  
+  useEffect(() => {
+    const loadTemplate = async () => {
+      const { data, error } = await supabase
+        .from('templates')
+        .select()
+        .eq('id', templateId)
+        .single();
+        
+      if (error) throw error;
+      setTemplate(data);
+    };
+    
+    loadTemplate();
+  }, [templateId]);
+  
+  return template;
+};
+```
+
+### Response Handling
+```typescript
+interface Response {
+  id: string;
+  templateId: string;
+  userId: string;
+  answers: Record<string, any>;
+  completedAt?: string;
+}
+
+const useResponses = () => {
+  const saveResponse = async (response: Partial<Response>) => {
+    const { data, error } = await supabase
+      .from('responses')
+      .insert(response);
+      
+    if (error) throw error;
+    return data;
+  };
+  
+  return {
+    saveResponse,
+    loadResponses,
+    updateResponse
+  };
+};
+```
 
 ## Error Handling
 
-### Database Operations
+### Error Boundaries
 ```typescript
-class DatabaseError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'DatabaseError';
+class FlowErrorBoundary extends React.Component<ErrorBoundaryProps> {
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
   }
-}
 
-async function handleDatabaseOperation<T>(
-  operation: () => Promise<T>
-): Promise<T> {
-  try {
-    return await operation();
-  } catch (error) {
-    console.error('Database operation failed:', error);
-    throw new DatabaseError(error.message);
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    logError(error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <ErrorDisplay error={this.state.error} />;
+    }
+    return this.props.children;
   }
 }
 ```
 
-### User Actions
-- Validation feedback
-- Confirmation dialogs
-- Error boundaries
-- Loading states
-- Retry mechanisms
+### API Error Handling
+```typescript
+interface ApiError extends Error {
+  code: string;
+  details?: any;
+}
+
+const handleApiError = (error: ApiError) => {
+  switch (error.code) {
+    case 'VALIDATION_ERROR':
+      return { message: 'Please check your input' };
+    case 'NETWORK_ERROR':
+      return { message: 'Connection lost' };
+    default:
+      return { message: 'An unexpected error occurred' };
+  }
+};
+```
 
 ## Performance Optimization
 
-### Caching Layer
+### Component Optimization
 ```typescript
-class CacheManager {
-  private cache: Map<string, any>;
-  private ttl: number;
+// Memoized Components
+const MemoizedQuestion = React.memo(Question, (prev, next) => {
+  return prev.value === next.value && prev.error === next.error;
+});
 
-  constructor(ttl = 5 * 60 * 1000) {
-    this.cache = new Map();
-    this.ttl = ttl;
-  }
+// Lazy Loading
+const LazyFlow = React.lazy(() => import('./components/Flow'));
+```
 
-  set(key: string, value: any): void {
-    this.cache.set(key, {
-      value,
-      timestamp: Date.now()
-    });
-  }
-
-  get(key: string): any | null {
-    const item = this.cache.get(key);
+### Data Caching
+```typescript
+const useDataCache = () => {
+  const cache = new Map<string, { data: any; timestamp: number }>();
+  
+  const set = (key: string, data: any) => {
+    cache.set(key, { data, timestamp: Date.now() });
+  };
+  
+  const get = (key: string) => {
+    const item = cache.get(key);
     if (!item) return null;
     
-    if (Date.now() - item.timestamp > this.ttl) {
-      this.cache.delete(key);
+    if (Date.now() - item.timestamp > 5 * 60 * 1000) {
+      cache.delete(key);
       return null;
     }
     
-    return item.value;
+    return item.data;
+  };
+  
+  return { set, get };
+};
+```
+
+## Security
+
+### Input Validation
+```typescript
+const validateInput = (value: any, rules: ValidationRule[]) => {
+  for (const rule of rules) {
+    const isValid = rule.validate(value);
+    if (!isValid) {
+      return { isValid: false, message: rule.message };
+    }
   }
-}
+  return { isValid: true };
+};
 ```
 
-### Real-time Optimization
-- Selective subscription patterns
-- Debounced updates
-- Optimistic UI updates
-- Connection management
-
-## Security Implementation
-
-### Row Level Security
-```sql
--- Templates RLS
-alter table templates enable row level security;
-
-create policy "Read published templates"
-  on templates for select
-  using (status = 'published');
-
-create policy "Manage own templates"
-  on templates for all
-  using (auth.uid() = user_id);
-
--- Responses RLS
-alter table responses enable row level security;
-
-create policy "Manage own responses"
-  on responses for all
-  using (auth.uid() = user_id);
+### Data Access Control
+```typescript
+// Row Level Security Policies
+const setupRLS = () => {
+  // Templates RLS
+  sql`
+    alter table templates enable row level security;
+    
+    create policy "Read published templates"
+      on templates for select
+      using (status = 'published');
+      
+    create policy "Manage own templates"
+      on templates for all
+      using (auth.uid() = user_id);
+  `;
+  
+  // Responses RLS
+  sql`
+    alter table responses enable row level security;
+    
+    create policy "Manage own responses"
+      on responses for all
+      using (auth.uid() = user_id);
+  `;
+};
 ```
 
-### Authentication Flow
-1. User signs in through Supabase Auth
-2. JWT token stored securely
-3. RLS policies enforce access
-4. Real-time channels authenticated
+## Best Practices
 
-## Testing Strategy
+1. **Component Design**
+   - Single responsibility principle
+   - Proper prop typing
+   - Error boundary implementation
+   - Loading state handling
 
-### Unit Tests
-- Component testing
-- Hook testing
-- Repository testing
-- Utility function testing
+2. **State Management**
+   - Appropriate state scoping
+   - Consistent state updates
+   - Side effect handling
+   - Error state management
 
-### Integration Tests
-- User flows
-- Database operations
-- Real-time updates
-- Authentication flows
+3. **Performance**
+   - Component memoization
+   - Lazy loading
+   - Data caching
+   - Bundle optimization
 
-## Future Considerations
+4. **Security**
+   - Input validation
+   - Data access control
+   - Error handling
+   - Secure data storage
 
-### Planned Features
-- Advanced sorting options
-- Template categories
-- Batch operations
-- Version control
+## Troubleshooting Guide
 
-### Scalability
-- Performance monitoring
-- Database optimization
-- Caching strategies
-- Load balancing
+1. **Common Issues**
+   - Form validation not triggering
+   - Progress not saving
+   - Navigation issues
+   - State synchronization problems
+
+2. **Solutions**
+   - Check validation rules implementation
+   - Verify progress saving mechanism
+   - Debug navigation guards
+   - Review state management implementation

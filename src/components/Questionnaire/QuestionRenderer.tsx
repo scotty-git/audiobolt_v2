@@ -1,6 +1,5 @@
 import React from 'react';
-import { Question } from '../../types/questionnaire';
-import { cn } from '../../utils/cn';
+import { Question } from '../../types';
 
 interface QuestionRendererProps {
   question: Question;
@@ -15,154 +14,137 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   onChange,
   error,
 }) => {
-  const handleChange = (newValue: string | string[]) => {
-    onChange(newValue);
+  const renderInput = () => {
+    switch (question.type) {
+      case 'text':
+      case 'email':
+        return (
+          <input
+            type={question.type}
+            value={value as string}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={question.placeholder}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required={question.validation.required}
+          />
+        );
+
+      case 'number':
+        return (
+          <input
+            type="number"
+            value={value as string}
+            onChange={(e) => onChange(e.target.value)}
+            min={question.validation.minValue}
+            max={question.validation.maxValue}
+            step={question.validation.step}
+            placeholder={question.placeholder}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required={question.validation.required}
+          />
+        );
+
+      case 'select':
+        return (
+          <select
+            value={value as string}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required={question.validation.required}
+          >
+            <option value="">Select an option...</option>
+            {question.options?.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        );
+
+      case 'checkbox':
+        return (
+          <div className="space-y-2">
+            {question.options?.map((option) => (
+              <label key={option.value} className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  checked={Array.isArray(value) && value.includes(option.value)}
+                  onChange={(e) => {
+                    const newValue = Array.isArray(value) ? [...value] : [];
+                    if (e.target.checked) {
+                      newValue.push(option.value);
+                    } else {
+                      const index = newValue.indexOf(option.value);
+                      if (index > -1) {
+                        newValue.splice(index, 1);
+                      }
+                    }
+                    onChange(newValue);
+                  }}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-gray-700">{option.label}</span>
+              </label>
+            ))}
+          </div>
+        );
+
+      case 'radio':
+        return (
+          <div className="space-y-2">
+            {question.options?.map((option) => (
+              <label key={option.value} className="flex items-center space-x-3">
+                <input
+                  type="radio"
+                  checked={value === option.value}
+                  onChange={(e) => onChange(option.value)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                />
+                <span className="text-gray-700">{option.label}</span>
+              </label>
+            ))}
+          </div>
+        );
+
+      case 'long_text':
+        return (
+          <textarea
+            value={value as string}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={question.placeholder}
+            rows={4}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required={question.validation.required}
+          />
+        );
+
+      default:
+        return (
+          <input
+            type="text"
+            value={value as string}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={question.placeholder}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required={question.validation.required}
+          />
+        );
+    }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-start">
-        <label className="block text-lg font-medium text-gray-900">
+    <div className="space-y-2">
+      <div className="flex justify-between">
+        <label className="block text-sm font-medium text-gray-700">
           {question.text}
-          {question.validation?.required && <span className="text-red-500 ml-1">*</span>}
+          {question.validation.required && <span className="text-red-500 ml-1">*</span>}
         </label>
+        {question.description && (
+          <span className="text-sm text-gray-500">{question.description}</span>
+        )}
       </div>
-      
-      {question.description && (
-        <p className="text-sm text-gray-600">{question.description}</p>
-      )}
-
-      {(question.type === 'text' || question.type === 'email') && (
-        <input
-          type={question.type}
-          value={value as string}
-          onChange={(e) => handleChange(e.target.value)}
-          placeholder={question.placeholder}
-          className={cn(
-            "w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors",
-            error ? "border-red-300 bg-red-50" : "border-gray-300"
-          )}
-        />
-      )}
-
-      {(question.type === 'long_text' || question.type === 'textarea') && (
-        <textarea
-          value={value as string}
-          onChange={(e) => handleChange(e.target.value)}
-          placeholder={question.placeholder}
-          className={cn(
-            "w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors min-h-[120px]",
-            error ? "border-red-300 bg-red-50" : "border-gray-300"
-          )}
-          rows={5}
-        />
-      )}
-
-      {question.type === 'select' && question.options && (
-        <select
-          value={value as string}
-          onChange={(e) => handleChange(e.target.value)}
-          className={cn(
-            "w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors",
-            error ? "border-red-300 bg-red-50" : "border-gray-300"
-          )}
-        >
-          <option value="">Select an option</option>
-          {question.options.map((option) => (
-            <option key={option.id} value={option.value}>
-              {option.text}
-            </option>
-          ))}
-        </select>
-      )}
-
-      {(question.type === 'radio' || question.type === 'multiple_choice') && question.options && (
-        <div className="space-y-3">
-          {question.options.map((option) => (
-            <label
-              key={option.id}
-              className={cn(
-                "flex items-center p-3 border rounded-lg cursor-pointer transition-colors",
-                value === option.value 
-                  ? "border-blue-500 bg-blue-50" 
-                  : "border-gray-200 hover:bg-gray-50"
-              )}
-            >
-              <input
-                type="radio"
-                name={question.id}
-                value={option.value}
-                checked={value === option.value}
-                onChange={(e) => handleChange(e.target.value)}
-                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-              />
-              <span className="ml-3">{option.text}</span>
-            </label>
-          ))}
-        </div>
-      )}
-
-      {question.type === 'checkbox' && question.options && (
-        <div className="space-y-3">
-          {question.options.map((option) => (
-            <label
-              key={option.id}
-              className={cn(
-                "flex items-center p-3 border rounded-lg cursor-pointer transition-colors",
-                Array.isArray(value) && value.includes(option.value)
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-gray-200 hover:bg-gray-50"
-              )}
-            >
-              <input
-                type="checkbox"
-                value={option.value}
-                checked={Array.isArray(value) && value.includes(option.value)}
-                onChange={(e) => {
-                  const newValue = Array.isArray(value) ? [...value] : [];
-                  if (e.target.checked) {
-                    newValue.push(option.value);
-                  } else {
-                    const index = newValue.indexOf(option.value);
-                    if (index > -1) {
-                      newValue.splice(index, 1);
-                    }
-                  }
-                  handleChange(newValue);
-                }}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <span className="ml-3">{option.text}</span>
-            </label>
-          ))}
-        </div>
-      )}
-
-      {question.type === 'slider' && (
-        <div className="space-y-4">
-          <input
-            type="range"
-            min={question.validation?.minValue || 0}
-            max={question.validation?.maxValue || 100}
-            step={question.validation?.step || 1}
-            value={value as string}
-            onChange={(e) => handleChange(e.target.value)}
-            className="w-full"
-          />
-          <div className="flex justify-between text-sm text-gray-600">
-            <span>{question.validation?.minValue || 0}</span>
-            <span>Selected: {value}</span>
-            <span>{question.validation?.maxValue || 100}</span>
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <p className="text-sm text-red-600 mt-1 flex items-center gap-1">
-          <span className="inline-block w-1 h-1 bg-red-600 rounded-full" />
-          {error}
-        </p>
-      )}
+      {renderInput()}
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 };

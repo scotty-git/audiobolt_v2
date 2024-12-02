@@ -8,20 +8,7 @@ import { EditSubmissionModal } from '../components/Submissions/EditSubmissionMod
 import { ExportButton } from '../components/Submissions/ExportButton';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 import { LoadingSpinner } from '../components/feedback/LoadingSpinner';
-
-interface Response {
-  id: string;
-  template_id: string;
-  answers: Record<string, any>;
-  completed_at?: string;
-  metadata?: string;
-}
-
-interface Template {
-  id: string;
-  title: string;
-  content: string;
-}
+import { Template, Response } from '../types';
 
 export const SubmissionsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,11 +28,14 @@ export const SubmissionsPage: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [loadedResponses, loadedTemplates] = await Promise.all([
+        setIsLoading(true);
+        const [submissions, loadedTemplates] = await Promise.all([
           responseRepository.findAll(),
           templateRepository.findAll()
         ]);
-        setResponses(loadedResponses);
+        console.log('Loaded submissions:', submissions);
+        console.log('Loaded templates:', loadedTemplates);
+        setResponses(submissions);
         setTemplates(loadedTemplates);
       } catch (error) {
         console.error('Error loading data:', error);
@@ -57,14 +47,13 @@ export const SubmissionsPage: React.FC = () => {
     loadData();
   }, []);
 
-  const handleSaveEdit = async (updatedAnswers: Record<string, any>) => {
+  const handleSaveEdit = async (updatedAnswers: Record<string, unknown>) => {
     if (!editingSubmission) return;
 
     try {
       const updatedResponse = await responseRepository.update(editingSubmission.response.id, {
         ...editingSubmission.response,
-        answers: updatedAnswers,
-        last_updated: new Date().toISOString()
+        answers: JSON.stringify(updatedAnswers)
       });
 
       setResponses(prev =>
@@ -95,6 +84,77 @@ export const SubmissionsPage: React.FC = () => {
     } catch (error) {
       console.error('Error deleting response:', error);
       alert('Failed to delete submission. Please try again.');
+    }
+  };
+
+  const handleExportSubmission = (submission: Response) => {
+    try {
+      const dataStr = JSON.stringify(submission, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `submission-${submission.id}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error exporting submission:', error);
+      alert('Failed to export submission');
+    }
+  };
+
+  const renderSubmissionDetails = (submission: Response) => {
+    try {
+      // Parse answers if they're stored as a string
+      const parsedAnswers = typeof submission.answers === 'string' 
+        ? JSON.parse(submission.answers) 
+        : submission.answers;
+
+      console.log('Rendering submission details:', {
+        submission,
+        parsedAnswers
+      });
+
+      return (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold">
+              {(submission.metadata as any)?.templateTitle || 'Untitled Submission'}
+            </h2>
+            <span className="text-sm text-gray-500">
+              Submitted on {formatDate(submission.completed_at || submission.started_at || '')}
+            </span>
+          </div>
+
+          {Object.entries(parsedAnswers).map(([questionId, answer]) => (
+            <div key={questionId} className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="font-medium mb-2">{questionId}</h3>
+              <p className="text-gray-700">
+                {Array.isArray(answer) 
+                  ? answer.join(', ')
+                  : answer?.toString() || 'Not answered'}
+              </p>
+            </div>
+          ))}
+
+          <div className="flex justify-end space-x-4">
+            <button
+              onClick={() => handleExportSubmission(submission)}
+              className="flex items-center px-4 py-2 text-blue-600 hover:text-blue-700"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Export as JSON
+            </button>
+          </div>
+        </div>
+      );
+    } catch (error) {
+      console.error('Error rendering submission details:', error, submission);
+      return (
+        <div className="p-4 bg-red-100 text-red-700 rounded-md">
+          Error displaying submission details. Please try again.
+        </div>
+      );
     }
   };
 
@@ -172,7 +232,10 @@ export const SubmissionsPage: React.FC = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredResponses.map((response) => {
                   const template = templates.find(t => t.id === response.template_id);
-                  const answers = JSON.parse(response.answers);
+                  const answers = typeof response.answers === 'string' 
+                    ? JSON.parse(response.answers)
+                    : response.answers;
+                    
                   return (
                     <tr key={response.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">

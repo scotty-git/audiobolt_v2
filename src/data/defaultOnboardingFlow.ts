@@ -53,14 +53,16 @@ export const defaultOnboardingFlow = {
           id: "sex",
           type: "select",
           text: "What is your gender?",
-          options: [
-            { id: "male", text: "Male", value: "male" },
-            { id: "female", text: "Female", value: "female" },
-            { id: "other", text: "Other", value: "other" }
-          ],
           validation: {
             required: true
-          }
+          },
+          options: [
+            { label: "Male", value: "male" },
+            { label: "Female", value: "female" },
+            { label: "Non-binary", value: "non-binary" },
+            { label: "Other", value: "other" },
+            { label: "Prefer not to say", value: "prefer_not_to_say" }
+          ]
         }
       ]
     },
@@ -86,11 +88,12 @@ export const defaultOnboardingFlow = {
           type: "checkbox",
           text: "What motivates you the most? (Select all that apply)",
           options: [
-            { id: "recognition", text: "Recognition", value: "recognition" },
-            { id: "achievement", text: "Achievement", value: "achievement" },
-            { id: "helping-others", text: "Helping others", value: "helping_others" },
-            { id: "stability", text: "Stability", value: "stability" },
-            { id: "adventure", text: "Adventure", value: "adventure" }
+            { label: "Recognition", value: "recognition" },
+            { label: "Achievement", value: "achievement" },
+            { label: "Helping others", value: "helping_others" },
+            { label: "Personal growth", value: "personal_growth" },
+            { label: "Stability", value: "stability" },
+            { label: "Adventure", value: "adventure" }
           ],
           validation: {
             required: true,
