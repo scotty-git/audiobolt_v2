@@ -1,11 +1,12 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, LogOut } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 
 interface MobileMenuProps {
   isOpen: boolean;
   onClose: () => void;
+  onLogout: () => Promise<void>;
   menuItems: {
     label: string;
     path: string;
@@ -13,7 +14,7 @@ interface MobileMenuProps {
   }[];
 }
 
-export const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose, menuItems }) => {
+export const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose, menuItems, onLogout }) => {
   if (!isOpen) return null;
 
   return (
@@ -22,8 +23,12 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose, menuIte
       <div className="fixed inset-y-0 right-0 w-64 bg-white shadow-xl">
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-lg font-semibold">Menu</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
-            <X size={24} />
+          <button 
+              className="p-2 hover:bg-gray-100 rounded-full"
+              onClick={onClose}
+              aria-label="Close menu"
+          >
+            <X />
           </button>
         </div>
         
@@ -69,6 +74,20 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose, menuIte
               )}
             </div>
           ))}
+
+          {/* Logout Button */}
+          <div className="mt-4 pt-4 border-t">
+            <button
+              onClick={() => {
+                onLogout();
+                onClose();
+              }}
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded"
+            >
+              <LogOut size={18} />
+              <span>Logout</span>
+            </button>
+          </div>
         </nav>
       </div>
     </div>

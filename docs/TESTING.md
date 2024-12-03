@@ -1,472 +1,326 @@
 # Testing Documentation
 
-## Table of Contents
-1. [Testing Architecture](#testing-architecture)
-2. [Test Implementation](#test-implementation)
-3. [Testing Patterns](#testing-patterns)
-4. [Test Utils](#test-utils)
-5. [Common Issues](#common-issues)
-6. [Coverage Goals](#coverage-goals)
-7. [Tools and Configuration](#tools-and-configuration)
+## Overview
 
-## Testing Architecture
+This document outlines our testing strategy, patterns, and examples for the Audiobook Questionnaire Builder application, focusing on our current implementation.
 
-### Testing Stack
-- Primary Testing Framework: Vitest
-- Testing Libraries: 
-  - @testing-library/react
-  - @testing-library/jest-dom
-  - @testing-library/user-event
-  - happy-dom (for DOM environment)
-  - msw (Mock Service Worker)
+## Testing Stack
 
-### Testing Pyramid
+- Vitest
+- React Testing Library
+- MSW (Mock Service Worker) for API mocking
+- Testing Library User Event
+- Supabase Testing Helpers
+
+## Test File Structure
+
 ```
-     E2E Tests     
-    /          \    
-   /  Integration \  
-  /     Tests      \ 
- /                  \
-/     Unit Tests     \
+src/__tests__/
+├── components/          # Component tests
+│   ├── Navigation.test.tsx
+│   └── auth/
+│       └── AuthForms.test.tsx
+├── user/               # User-related tests
+│   └── UserProfile.test.tsx
+├── utils/              # Test utilities
+│   └── test-utils.tsx
+└── setup.ts           # Global test setup
 ```
 
-1. **Unit Tests** (60%)
-   - Individual components
-   - Hooks
-   - Utilities
-   - Services
+## Test Utilities
 
-2. **Integration Tests** (30%)
-   - Flow testing
-   - Multi-component interaction
-   - API integration
-   - State management
-
-3. **E2E Tests** (10%)
-   - Critical user paths
-   - Full flow completion
-   - Real API integration
-
-## Test Implementation
-
-### 1. Onboarding Flow Tests
-
-#### Component Rendering
+### Test Auth Provider
 ```typescript
-import { render, screen } from '@testing-library/react';
-import { OnboardingFlow } from '../components/OnboardingFlow';
-
-describe('OnboardingFlow', () => {
-  const mockTemplate = {
-    id: '1',
-    sections: [
-      {
-        id: 'section1',
-        title: 'Personal Info',
-        questions: [
-          {
-            id: 'q1',
-            type: 'text',
-            text: 'What is your name?'
-          }
-        ]
-      }
-    ]
-  };
-
-  it('renders initial section correctly', () => {
-    render(<OnboardingFlow template={mockTemplate} />);
-    
-    expect(screen.getByText('Personal Info')).toBeInTheDocument();
-    expect(screen.getByText('What is your name?')).toBeInTheDocument();
+// src/__tests__/utils/test-utils.tsx
+const TestAuthProvider: React.FC<{ 
+  children: React.ReactNode; 
+  initialRole?: UserRole 
+}> = ({ 
+  children, 
+  initialRole = 'user' 
+}) => {
+  const [user, setUser] = useState<UserProfile>({
+    id: 'test-user-id',
+    email: 'test@example.com',
+    role: initialRole,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
   });
+  const [loading, setLoading] = useState(false);
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [impersonatedUser, setImpersonatedUser] = useState<UserProfile | null>(null);
+  const [originalAdminUser, setOriginalAdminUser] = useState<UserProfile | null>(null);
 
-  it('handles section navigation', async () => {
-    const user = userEvent.setup();
-    render(<OnboardingFlow template={mockTemplate} />);
-    
-    await user.type(screen.getByRole('textbox'), 'John Doe');
-    await user.click(screen.getByText('Next'));
-    
-    expect(screen.getByText('Section 2')).toBeInTheDocument();
-  });
-});
+  // ... rest of implementation
+};
+
+// Create providers wrapper with role
+export const createProvidersWithRole = (role: UserRole = 'user') => {
+  return ({ children }: { children: React.ReactNode }) => (
+    <BrowserRouter>
+      <TestAuthProvider initialRole={role}>
+        {children}
+      </TestAuthProvider>
+    </BrowserRouter>
+  );
+};
 ```
 
-#### Form Validation
+### Auth Utilities
 ```typescript
-describe('Form Validation', () => {
-  it('shows validation errors for required fields', async () => {
-    const user = userEvent.setup();
-    render(<OnboardingFlow template={mockTemplate} />);
-    
-    await user.click(screen.getByText('Next'));
-    
-    expect(screen.getByText('This field is required')).toBeInTheDocument();
-  });
+// src/utils/auth.ts
+export const hasRole = (user: UserProfile | null, role: UserRole): boolean => {
+  if (!user) return false;
+  return user.role === role;
+};
 
-  it('clears validation errors after input', async () => {
-    const user = userEvent.setup();
-    render(<OnboardingFlow template={mockTemplate} />);
-    
-    await user.click(screen.getByText('Next'));
-    expect(screen.getByText('This field is required')).toBeInTheDocument();
-    
-    await user.type(screen.getByRole('textbox'), 'John');
-    expect(screen.queryByText('This field is required')).not.toBeInTheDocument();
-  });
-});
+export const isAdmin = (user: UserProfile | null): boolean => {
+  return hasRole(user, 'admin');
+};
+
+export const isUser = (user: UserProfile | null): boolean => {
+  return hasRole(user, 'user');
+};
 ```
 
-### 2. Questionnaire Flow Tests
+## Component Tests
 
-#### Template Loading
+### Navigation Tests
 ```typescript
-describe('Template Loading', () => {
-  it('shows loading state while fetching template', () => {
-    render(<QuestionnaireFlow templateId="123" />);
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+// src/__tests__/components/Navigation.test.tsx
+describe('Navigation Component', () => {
+  describe('as regular user', () => {
+    beforeEach(async () => {
+      render(<Navigation />, { 
+        wrapper: createProvidersWithRole('user') 
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByText('Initializing...')).not.toBeInTheDocument();
+      });
+    });
+
+    it('has correct positioning without admin bar', async () => {
+      await waitFor(() => {
+        const header = screen.getByRole('banner');
+        const classes = header.className.split(' ');
+        expect(classes).toContain('top-0');
+      });
+    });
   });
 
-  it('handles template loading error', async () => {
-    server.use(
-      rest.get('/api/templates/:id', (req, res, ctx) => {
-        return res(ctx.status(500));
-      })
-    );
-    
-    render(<QuestionnaireFlow templateId="123" />);
-    
-    expect(await screen.findByText('Error loading template')).toBeInTheDocument();
-  });
-});
-```
+  describe('as admin user', () => {
+    beforeEach(async () => {
+      render(<Navigation />, { 
+        wrapper: createProvidersWithRole('admin') 
+      });
+    });
 
-#### Answer Saving
-```typescript
-describe('Answer Saving', () => {
-  it('saves answers automatically', async () => {
-    const mockSave = vi.fn();
-    const user = userEvent.setup();
-    
-    render(<QuestionnaireFlow onSave={mockSave} />);
-    
-    await user.type(screen.getByRole('textbox'), 'Test Answer');
-    await waitFor(() => {
-      expect(mockSave).toHaveBeenCalledWith({
-        questionId: 'q1',
-        answer: 'Test Answer'
+    it('has correct positioning with admin bar', async () => {
+      await waitFor(() => {
+        const header = screen.getByRole('banner');
+        const classes = header.className.split(' ');
+        expect(classes).toContain('top-12');
       });
     });
   });
 });
 ```
 
-## Testing Patterns
-
-### 1. Component Testing Hierarchy
+### User Profile Tests
 ```typescript
-// Parent Component Test
-describe('ParentComponent', () => {
-  it('renders child components correctly', () => {
-    render(<ParentComponent />);
-    expect(screen.getByTestId('child-1')).toBeInTheDocument();
-    expect(screen.getByTestId('child-2')).toBeInTheDocument();
-  });
-});
-
-// Child Component Test
-describe('ChildComponent', () => {
-  it('handles props correctly', () => {
-    render(<ChildComponent value="test" />);
-    expect(screen.getByText('test')).toBeInTheDocument();
-  });
-});
-```
-
-### 2. Mock Implementation
-```typescript
-// Mock Repository
-const mockTemplateRepo = {
-  findById: vi.fn(),
-  save: vi.fn(),
-  delete: vi.fn()
-};
-
-// Mock Hook
-vi.mock('../hooks/useTemplate', () => ({
-  useTemplate: () => ({
-    template: mockTemplate,
-    isLoading: false,
-    error: null
-  })
-}));
-
-// Mock API
-const server = setupServer(
-  rest.get('/api/templates/:id', (req, res, ctx) => {
-    return res(ctx.json(mockTemplate));
-  })
-);
-```
-
-### 3. Test Data Generation
-```typescript
-// Test Data Generator
-const createMockTemplate = (overrides = {}) => ({
-  id: 'template-1',
-  title: 'Test Template',
-  sections: [],
-  ...overrides
-});
-
-// Test Data Factory
-class TestDataFactory {
-  static createTemplate(type: 'onboarding' | 'questionnaire') {
-    return {
-      id: `template-${Date.now()}`,
-      type,
-      sections: this.createSections(3)
-    };
-  }
-
-  static createSections(count: number) {
-    return Array.from({ length: count }, (_, i) => ({
-      id: `section-${i}`,
-      title: `Section ${i + 1}`,
-      questions: this.createQuestions(2)
-    }));
-  }
-}
-```
-
-## Test Utils
-
-### 1. Custom Renders
-```typescript
-// With Router
-const renderWithRouter = (ui: React.ReactElement, { route = '/' } = {}) => {
-  window.history.pushState({}, 'Test page', route);
-  return render(ui, { wrapper: BrowserRouter });
-};
-
-// With Providers
-const renderWithProviders = (
-  ui: React.ReactElement,
-  { preloadedState = {}, store = configureStore({ reducer, preloadedState }) } = {}
-) => {
-  return {
-    store,
-    ...render(ui, {
-      wrapper: ({ children }) => (
-        <Provider store={store}>
-          {children}
-        </Provider>
-      )
-    })
+// src/__tests__/user/UserProfile.test.tsx
+describe('User Profile Integration Tests', () => {
+  const testUser = {
+    email: 'test@example.com',
+    role: 'user'
   };
-};
-```
 
-### 2. Custom Matchers
-```typescript
-expect.extend({
-  toBeValidTemplate(received) {
-    const isValid = received.id && received.sections && Array.isArray(received.sections);
-    return {
-      message: () => `expected ${received} to be a valid template`,
-      pass: isValid
-    };
-  }
-});
-```
+  let userId: string;
 
-### 3. Test Hooks
-```typescript
-const useTestHook = () => {
-  const [isReady, setIsReady] = useState(false);
-  
-  useEffect(() => {
-    // Simulate async initialization
-    setTimeout(() => setIsReady(true), 0);
-  }, []);
-  
-  return { isReady };
-};
+  beforeEach(async () => {
+    // Clean up any existing test user
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', testUser.email)
+      .single();
 
-describe('useTestHook', () => {
-  it('initializes correctly', async () => {
-    const { result } = renderHook(() => useTestHook());
-    
-    expect(result.current.isReady).toBe(false);
-    await waitFor(() => {
-      expect(result.current.isReady).toBe(true);
-    });
-  });
-});
-```
-
-## Common Issues
-
-### 1. Act Warnings
-```typescript
-// Problem
-test('updates state', () => {
-  const { result } = renderHook(() => useState(false));
-  result.current[1](true); // Warning: State update not wrapped in act(...)
-});
-
-// Solution
-test('updates state', () => {
-  const { result } = renderHook(() => useState(false));
-  act(() => {
-    result.current[1](true);
-  });
-});
-```
-
-### 2. Async Testing
-```typescript
-// Problem
-test('loads data', async () => {
-  render(<DataComponent />);
-  expect(screen.getByText('Data')).toBeInTheDocument(); // Fails: data not loaded yet
-});
-
-// Solution
-test('loads data', async () => {
-  render(<DataComponent />);
-  await waitFor(() => {
-    expect(screen.getByText('Data')).toBeInTheDocument();
-  });
-});
-```
-
-## Coverage Goals
-
-### Target Coverage Metrics
-```typescript
-// vitest.config.ts
-export default defineConfig({
-  test: {
-    coverage: {
-      reporter: ['text', 'json', 'html'],
-      branches: 80,
-      functions: 80,
-      lines: 80,
-      statements: 80
+    if (existingUser) {
+      await supabase
+        .from('users')
+        .delete()
+        .eq('id', existingUser.id);
     }
-  }
+
+    // Create new test user
+    const { data: newUser } = await supabase
+      .from('users')
+      .insert([testUser])
+      .select()
+      .single();
+
+    userId = newUser.id;
+  });
+
+  afterEach(async () => {
+    if (userId) {
+      await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+    }
+  });
+
+  it('should store and retrieve profile data', async () => {
+    const simpleData = {
+      name: 'John Doe',
+      age: 30,
+      isActive: true
+    };
+
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ profile_data: simpleData })
+      .eq('id', userId);
+
+    expect(updateError).toBeNull();
+
+    const { data: result } = await supabase
+      .from('users')
+      .select('profile_data')
+      .eq('id', userId)
+      .single();
+
+    expect(result?.profile_data).toEqual(simpleData);
+  });
 });
 ```
 
-### Priority Areas
-1. Core Components (90%+)
-   - Form components
-   - Navigation components
-   - Error boundaries
-   - Loading states
+## API Mocking
 
-2. Business Logic (85%+)
-   - Validation rules
-   - Flow management
-   - State transitions
-   - Error handling
-
-3. Utils & Helpers (80%+)
-   - Data transformers
-   - Formatters
-   - Validators
-   - Type guards
-
-## Tools and Configuration
-
-### 1. Vitest Setup
+### MSW Setup
 ```typescript
-// vitest.setup.ts
-import '@testing-library/jest-dom';
-import { expect, afterEach } from 'vitest';
-import { cleanup } from '@testing-library/react';
-import * as matchers from '@testing-library/jest-dom/matchers';
+// src/__tests__/setup.ts
+const handlers = [
+  // Auth endpoints
+  http.post(`${SUPABASE_URL}/auth/v1/token`, () => {
+    return HttpResponse.json({
+      access_token: 'mock-token',
+      token_type: 'bearer',
+      expires_in: 3600,
+      refresh_token: 'mock-refresh-token',
+      user: {
+        id: '123',
+        email: 'test@example.com'
+      }
+    });
+  }),
 
-expect.extend(matchers);
+  // User endpoints
+  http.get(`${SUPABASE_URL}/auth/v1/user`, () => {
+    return HttpResponse.json({
+      user: { id: '123', email: 'test@example.com' }
+    });
+  }),
 
-afterEach(() => {
-  cleanup();
-});
-```
-
-### 2. MSW Setup
-```typescript
-// test/mocks/server.ts
-import { setupServer } from 'msw/node';
-import { handlers } from './handlers';
+  // Other endpoints...
+];
 
 export const server = setupServer(...handlers);
-
-beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
 ```
 
-### 3. Test Environment
-```typescript
-// vitest.config.ts
-export default defineConfig({
-  test: {
-    environment: 'happy-dom',
-    setupFiles: ['./vitest.setup.ts'],
-    include: ['**/*.{test,spec}.{ts,tsx}'],
-    coverage: {
-      provider: 'c8'
-    },
-    globals: true
-  }
-});
-```
+## Test Types
+
+### 1. Component Tests
+- Navigation rendering and behavior
+- Auth-aware component states
+- Role-based UI elements
+- Mobile responsiveness
+
+### 2. Integration Tests
+- User profile management
+- Auth state persistence
+- Role-based access
+- Data synchronization
+
+### 3. API Tests
+- Supabase client interactions
+- Error handling
+- Data validation
+- Auth flows
 
 ## Best Practices
 
-1. **Test Organization**
-   - Group related tests
-   - Use descriptive names
-   - Follow AAA pattern (Arrange-Act-Assert)
-   - Keep tests focused
-
-2. **Mock Usage**
-   - Mock at boundaries
-   - Use realistic data
-   - Clear mocks between tests
-   - Document mock behavior
-
-3. **Async Testing**
-   - Always await async operations
-   - Use proper async utilities
+1. **Test Setup**
+   - Use `createProvidersWithRole` for role-based tests
+   - Clean up test data after each test
+   - Mock Supabase responses consistently
    - Handle loading states
-   - Test error scenarios
 
-4. **State Management**
-   - Test initial state
-   - Verify state transitions
-   - Test side effects
-   - Validate error states
+2. **Auth Testing**
+   - Test both user and admin roles
+   - Verify auth state management
+   - Test protected routes
+   - Validate role-based access
 
-## Contributing
+3. **Component Testing**
+   - Test with different roles
+   - Verify UI states
+   - Check responsive behavior
+   - Test error states
 
-1. **Adding Tests**
-   - Follow existing patterns
-   - Include both positive and negative cases
-   - Document complex test scenarios
-   - Update test utils as needed
+4. **Data Testing**
+   - Use test database
+   - Clean up test data
+   - Verify data persistence
+   - Test error handling
 
-2. **Updating Tests**
-   - Maintain coverage levels
-   - Update related tests
-   - Document breaking changes
-   - Review test performance
+## Running Tests
 
-3. **Test Review**
-   - Check test isolation
-   - Verify mock usage
-   - Review error handling
-   - Check performance impact
+```bash
+# Run all tests
+npm test
+
+# Run specific test file
+npm test Navigation.test.tsx
+
+# Run with coverage
+npm run coverage
+
+# Run in watch mode
+npm test -- --watch
+```
+
+## Test Coverage Requirements
+
+1. **Components**: 90%
+   - Navigation
+   - Auth forms
+   - Protected routes
+   - Role-based UI
+
+2. **Integration**: 85%
+   - User profiles
+   - Auth flows
+   - Data persistence
+   - Role management
+
+3. **Utils**: 95%
+   - Auth utilities
+   - Test helpers
+   - Type guards
+
+## Continuous Integration
+
+1. **Pre-commit Hooks**
+   - Run tests
+   - Check coverage
+   - Lint code
+   - Type check
+
+2. **CI Pipeline**
+   - Build project
+   - Run all tests
+   - Generate coverage report
+   - Deploy if tests pass

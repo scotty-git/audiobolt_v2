@@ -1,8 +1,6 @@
 import { vi } from 'vitest';
 import '@testing-library/jest-dom';
 import './env';
-import { MemoryRouter } from 'react-router-dom';
-import { render } from '@testing-library/react';
 
 // Mock window location
 const mockWindow = {
@@ -74,13 +72,4 @@ afterEach(() => {
     
     // Clear all mocks
     vi.clearAllMocks();
-});
-
-// Utility function for rendering with router
-export const renderWithRouter = (ui: React.ReactElement, { route = '/' } = {}) => {
-  return render(
-    <MemoryRouter initialEntries={[route]}>
-      {ui}
-    </MemoryRouter>
-  );
-}; 
+}); 

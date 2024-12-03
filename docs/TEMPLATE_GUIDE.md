@@ -1,251 +1,331 @@
 # Template Guide
 
-This guide explains how to create onboarding flows and questionnaires using our JSON template format with real-time saving capabilities.
+## Overview
 
-## Template Structure
+This guide outlines the structure and usage of templates in the Audiobook Questionnaire Builder application. Templates are used to create consistent, reusable questionnaires and onboarding flows.
 
-Both onboarding flows and questionnaires follow a similar sectioned structure and are stored in Supabase:
+## Template Types
 
-```json
-{
-  "id": "uuid",                         // Unique UUID
-  "title": "Template Title",            // Display title
-  "description": "Template Description", // Brief description
-  "version": "1.0.0",                   // Semantic version
-  "type": "questionnaire",              // "questionnaire" or "onboarding"
-  "sections": [],                       // Array of sections
-  "settings": {},                       // Template settings
-  "metadata": {},                       // Additional metadata
-  "user_id": "uuid",                    // Owner's UUID
-  "created_at": "timestamp",            // Creation timestamp
-  "updated_at": "timestamp"             // Last update timestamp
+### 1. Questionnaire Templates
+```typescript
+interface QuestionnaireTemplate {
+  id: string;
+  title: string;
+  description?: string;
+  type: 'questionnaire';
+  structure: {
+    sections: Array<{
+      id: string;
+      title: string;
+      description?: string;
+      questions: Array<{
+        id: string;
+        type: QuestionType;
+        text: string;
+        required?: boolean;
+        options?: string[];
+        metadata?: Record<string, unknown>;
+      }>;
+    }>;
+  };
+  metadata?: {
+    requiresAuth?: boolean;
+    allowAnonymous?: boolean;
+    saveProgress?: boolean;
+    [key: string]: unknown;
+  };
 }
 ```
 
-### Sections
+### 2. Onboarding Templates
+```typescript
+interface OnboardingTemplate {
+  id: string;
+  title: string;
+  description?: string;
+  type: 'onboarding';
+  structure: {
+    sections: Array<{
+      id: string;
+      title: string;
+      description?: string;
+      requiresAuth?: boolean;
+      questions: Array<{
+        id: string;
+        type: QuestionType;
+        text: string;
+        required?: boolean;
+        options?: string[];
+        metadata?: Record<string, unknown>;
+      }>;
+    }>;
+  };
+  metadata?: {
+    requiresAuth?: boolean;
+    allowAnonymous?: boolean;
+    saveProgress?: boolean;
+    [key: string]: unknown;
+  };
+}
+```
 
-Each template is divided into sections:
+## Component Templates
 
-```json
-{
-  "sections": [
-    {
-      "id": "section-1",
-      "title": "Section Title",
-      "description": "Section Description",
-      "order": 0,
-      "isOptional": false,
-      "questions": []
+### 1. Protected Section Template
+```typescript
+const ProtectedSection: React.FC<{
+  children: React.ReactNode;
+  requiresAuth?: boolean;
+}> = ({ children, requiresAuth = true }) => {
+  const { user } = useAuth();
+  
+  if (requiresAuth && !user) {
+    return (
+      <div className="p-4 bg-yellow-50 rounded-lg">
+        <p className="text-yellow-700">
+          Please sign in to access this section
+        </p>
+        <Button
+          variant="secondary"
+          onClick={() => navigate('/login')}
+        >
+          Sign In
+        </Button>
+      </div>
+    );
+  }
+  
+  return <>{children}</>;
+};
+```
+
+### 2. Progress Tracking Template
+```typescript
+const ProgressTracker: React.FC<{
+  templateId: string;
+  sections: Array<{
+    id: string;
+    title: string;
+    requiresAuth?: boolean;
+  }>;
+}> = ({ templateId, sections }) => {
+  const { user } = useAuth();
+  const { progress, updateProgress } = useProgress(templateId);
+  
+  return (
+    <div className="space-y-4">
+      {sections.map((section) => (
+        <div
+          key={section.id}
+          className={clsx(
+            'p-4 rounded-lg',
+            {
+              'bg-green-50': progress?.completedSections.includes(section.id),
+              'bg-yellow-50': section.requiresAuth && !user,
+              'bg-gray-50': !progress?.completedSections.includes(section.id)
+            }
+          )}
+        >
+          <h3 className="font-medium">{section.title}</h3>
+          {section.requiresAuth && !user && (
+            <p className="text-sm text-yellow-700">
+              Sign in required
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+```
+
+### 3. Form Template with Auth
+```typescript
+const AuthAwareForm: React.FC<{
+  onSubmit: (data: unknown) => Promise<void>;
+  requiresAuth?: boolean;
+  saveProgress?: boolean;
+}> = ({ onSubmit, requiresAuth = false, saveProgress = true }) => {
+  const { user } = useAuth();
+  const [isDirty, setIsDirty] = useState(false);
+  
+  // Auto-save for authenticated users
+  useEffect(() => {
+    if (user && saveProgress && isDirty) {
+      const timer = setTimeout(() => {
+        onSubmit(formData);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
     }
-  ]
-}
-```
-
-### Questions
-
-Each section contains questions:
-
-```json
-{
-  "questions": [
-    {
-      "id": "question-1",
-      "type": "text",
-      "text": "Question text",
-      "description": "Optional description",
-      "placeholder": "Optional placeholder",
-      "validation": {
-        "required": true,
-        "minLength": 2,
-        "maxLength": 100
-      }
-    }
-  ]
-}
-```
-
-## Question Types
-
-### Text Input
-```json
-{
-  "id": "text-question",
-  "type": "text",
-  "text": "What is your name?",
-  "placeholder": "Enter your full name",
-  "validation": {
-    "required": true,
-    "minLength": 2,
-    "maxLength": 100
+  }, [formData, isDirty, user, saveProgress]);
+  
+  if (requiresAuth && !user) {
+    return (
+      <div className="p-4 bg-yellow-50 rounded-lg">
+        <p className="text-yellow-700">
+          Please sign in to access this form
+        </p>
+        <Button
+          variant="secondary"
+          onClick={() => navigate('/login')}
+        >
+          Sign In
+        </Button>
+      </div>
+    );
   }
-}
+  
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        await onSubmit(formData);
+        setIsDirty(false);
+      }}
+      onChange={() => setIsDirty(true)}
+    >
+      {/* Form fields */}
+    </form>
+  );
+};
 ```
 
-### Email Input
-```json
-{
-  "id": "email-question",
-  "type": "email",
-  "text": "What's your email address?",
-  "validation": {
-    "required": true,
-    "pattern": "email"
-  }
-}
+## Usage Examples
+
+### 1. Protected Questionnaire
+```typescript
+const ProtectedQuestionnaire: React.FC<{
+  template: QuestionnaireTemplate;
+}> = ({ template }) => {
+  const { user } = useAuth();
+  const { progress, updateProgress } = useProgress(template.id);
+  
+  return (
+    <div className="space-y-8">
+      <ProgressTracker
+        templateId={template.id}
+        sections={template.structure.sections}
+      />
+      
+      {template.structure.sections.map((section) => (
+        <ProtectedSection
+          key={section.id}
+          requiresAuth={section.requiresAuth}
+        >
+          <AuthAwareForm
+            onSubmit={async (data) => {
+              await updateProgress({
+                sectionId: section.id,
+                data
+              });
+            }}
+            requiresAuth={section.requiresAuth}
+            saveProgress={template.metadata?.saveProgress}
+          />
+        </ProtectedSection>
+      ))}
+    </div>
+  );
+};
 ```
 
-### Multiple Choice
-```json
-{
-  "id": "choice-question",
-  "type": "multiple_choice",
-  "text": "Select your preference",
-  "options": [
-    { "id": "opt1", "text": "Option 1", "value": "option1" },
-    { "id": "opt2", "text": "Option 2", "value": "option2" }
-  ],
-  "validation": {
-    "required": true
-  }
-}
+### 2. Mixed Access Onboarding
+```typescript
+const MixedAccessOnboarding: React.FC<{
+  template: OnboardingTemplate;
+}> = ({ template }) => {
+  const { user } = useAuth();
+  const { progress } = useProgress(template.id);
+  
+  return (
+    <div className="space-y-8">
+      {/* Public sections first */}
+      {template.structure.sections
+        .filter(section => !section.requiresAuth)
+        .map(section => (
+          <section key={section.id}>
+            <h2>{section.title}</h2>
+            <AuthAwareForm
+              onSubmit={async (data) => {
+                // Handle submission
+              }}
+              saveProgress={false}
+            />
+          </section>
+        ))}
+      
+      {/* Protected sections */}
+      {template.structure.sections
+        .filter(section => section.requiresAuth)
+        .map(section => (
+          <ProtectedSection
+            key={section.id}
+            requiresAuth={true}
+          >
+            <h2>{section.title}</h2>
+            <AuthAwareForm
+              onSubmit={async (data) => {
+                // Handle submission
+              }}
+              requiresAuth={true}
+              saveProgress={true}
+            />
+          </ProtectedSection>
+        ))}
+    </div>
+  );
+};
 ```
-
-### Slider
-```json
-{
-  "id": "slider-question",
-  "type": "slider",
-  "text": "Rate from 1-10",
-  "validation": {
-    "required": true,
-    "minValue": 1,
-    "maxValue": 10,
-    "step": 1
-  }
-}
-```
-
-### Checkbox Group
-```json
-{
-  "id": "checkbox-question",
-  "type": "checkbox",
-  "text": "Select all that apply",
-  "options": [
-    { "id": "opt1", "text": "Option 1", "value": "option1" },
-    { "id": "opt2", "text": "Option 2", "value": "option2" }
-  ],
-  "validation": {
-    "required": true,
-    "minSelected": 1
-  }
-}
-```
-
-## Validation Rules
-
-Available validation options:
-- `required`: Boolean
-- `minLength`: Number (for text)
-- `maxLength`: Number (for text)
-- `minValue`: Number (for slider)
-- `maxValue`: Number (for slider)
-- `step`: Number (for slider)
-- `pattern`: String (for email)
-- `minSelected`: Number (for checkbox)
-
-## Settings
-
-Template-wide settings:
-
-```json
-{
-  "settings": {
-    "allowSkipSections": false,
-    "showProgressBar": true,
-    "shuffleSections": false,
-    "completionMessage": "Thank you for completing the questionnaire!"
-  }
-}
-```
-
-## Metadata
-
-Additional template information:
-
-```json
-{
-  "metadata": {
-    "createdAt": "2024-03-14T12:00:00Z",
-    "updatedAt": "2024-03-14T12:00:00Z",
-    "createdBy": "admin",
-    "tags": ["self-help", "personal-development"],
-    "category": "mindfulness",
-    "status": "published"
-  }
-}
-```
-
-## Adding Templates
-
-### Using the Builder Interface
-
-1. Navigate to Templates
-2. Click "Create New Onboarding Flow" or "Create New Questionnaire"
-3. Use the visual builder to create sections and questions
-4. Changes are automatically saved in real-time
-5. Template status is shown in the top-right corner
-
-### Using JSON Import
-
-1. Navigate to Templates
-2. Click "Create New"
-3. Click "Import from JSON"
-4. Paste your JSON template
-5. Click "Import"
-6. Template will be validated and saved to Supabase
-
-## Real-time Collaboration
-
-Templates support real-time updates:
-
-1. **Auto-saving**
-   - All changes are saved automatically
-   - Progress is synced across devices
-   - Network status is shown in the UI
-
-2. **Version Control**
-   - Each save creates a new version
-   - Version history is maintained
-   - Ability to revert changes
-
-3. **Permissions**
-   - Templates can be private or shared
-   - Row Level Security controls access
-   - Published templates are read-only
-
-## Example Templates
-
-See the following files for complete examples:
-- `/data/templates/defaultOnboardingFlow.ts`
-- `/data/templates/defaultQuestionnaires.ts`
 
 ## Best Practices
 
-1. **Template Management**
-   - Use descriptive titles
-   - Add proper metadata
-   - Set appropriate permissions
-   - Test before publishing
+1. **Authentication**
+   - Clearly mark protected sections
+   - Handle auth state changes gracefully
+   - Provide clear user feedback
+   - Save progress for authenticated users
 
-2. **Real-time Features**
-   - Handle offline scenarios
-   - Implement conflict resolution
-   - Show sync status
-   - Cache responses
+2. **User Experience**
+   - Show auth requirements upfront
+   - Preserve form data during auth
+   - Enable auto-save when possible
+   - Clear loading states
 
 3. **Security**
-   - Validate user permissions
+   - Validate auth on server
+   - Apply proper RLS policies
    - Sanitize user input
-   - Follow RLS policies
-   - Handle errors gracefully
+   - Handle errors appropriately
+
+4. **Performance**
+   - Lazy load protected content
+   - Optimize auto-save
+   - Cache authenticated data
+   - Handle offline state
+
+## Template Creation Guidelines
+
+1. **Structure**
+   - Use consistent naming
+   - Document auth requirements
+   - Include proper types
+   - Add helpful comments
+
+2. **Authentication**
+   - Mark protected sections
+   - Set auth requirements
+   - Configure progress saving
+   - Handle anonymous access
+
+3. **Validation**
+   - Add field validation
+   - Check auth state
+   - Validate permissions
+   - Handle edge cases
+
+4. **Testing**
+   - Test with/without auth
+   - Verify protected sections
+   - Check auto-save
+   - Test error states

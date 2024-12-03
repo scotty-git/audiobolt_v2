@@ -1,30 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
-import * as dotenv from 'dotenv';
 
-// Load environment variables in Node.js environment
-if (typeof process !== 'undefined') {
-  dotenv.config();
-}
-
-// Get environment variables from either Vite or Node.js process
-const getEnvVar = (key: string): string => {
-  if (typeof process !== 'undefined' && process.env[key]) {
-    return process.env[key] as string;
-  }
-  if (typeof import.meta !== 'undefined' && import.meta.env[key]) {
-    return import.meta.env[key] as string;
-  }
-  throw new Error(`Missing environment variable: ${key}`);
-};
-
-const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
-const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Create a single instance of the Supabase client
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    storageKey: 'audiobolt-auth-token',
+    storage: window.localStorage,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce',
+    debug: import.meta.env.DEV // Only enable debug in development
+  }
+});
+
+// Export a function to get the same instance
+export const getSupabase = () => supabase;
 
 // Type definitions for our database tables
 export type Template = {

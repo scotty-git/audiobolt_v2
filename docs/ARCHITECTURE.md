@@ -2,7 +2,7 @@
 
 ## Overview
 
-The application follows a modular architecture with clear separation of concerns, designed to handle both onboarding flows and questionnaires in a flexible, maintainable way. It leverages Supabase for real-time database capabilities and robust security.
+The application follows a modular architecture with clear separation of concerns, designed to handle sophisticated user profiling, questionnaires, and onboarding flows. It leverages Supabase for real-time database capabilities, authentication, and role-based access control.
 
 ## Directory Structure
 ```
@@ -10,444 +10,352 @@ src/
 ├── components/           # Reusable UI components
 │   ├── common/          # Shared components
 │   ├── forms/           # Form-related components
-│   ├── flows/           # Flow-specific components
-│   │   ├── onboarding/  # Onboarding components
-│   │   └── questionnaire/ # Questionnaire components
-│   └── layout/          # Layout components
-├── hooks/               # Custom React hooks
-├── pages/               # Main application views
-├── lib/                 # Core libraries
-│   ├── supabase.ts     # Supabase client
-│   ├── validation.ts   # Validation utilities
-│   └── errors.ts       # Error handling
-├── types/              # TypeScript definitions
-└── utils/              # Helper functions
+│   ├── auth/            # Authentication components
+│   │   ├── SignIn.tsx
+│   │   ├── SignUp.tsx
+│   │   └── ResetPassword.tsx
+│   ├── admin/           # Admin-only components
+│   │   ├── ImpersonationBar.tsx
+│   │   └── UserManagement.tsx
+│   ├── flows/          # Flow-specific components
+│   └── layout/         # Layout components
+├── context/            # React Context providers
+│   ├── AuthContext.tsx # Authentication context
+│   └── RoleContext.tsx # Role management context
+├── hooks/             # Custom React hooks
+├── pages/             # Main application views
+├── lib/              # Core libraries
+│   ├── supabase.ts   # Supabase client
+│   ├── auth.ts       # Auth utilities
+│   └── roles.ts      # Role management
+├── types/            # TypeScript definitions
+└── utils/           # Helper functions
 ```
 
-## Flow Architecture
+## Authentication System
 
-### Component Hierarchy
-```
-UserOnboarding
-├── SectionRenderer
-│   ├── QuestionRenderer
-│   │   ├── TextInput
-│   │   ├── MultipleChoice
-│   │   ├── Checkbox
-│   │   └── CustomInputs
-│   └── ValidationLayer
-└── SectionProgress
-    ├── ProgressBar
-    └── NavigationControls
-```
-
-### Flow Components
+### Auth Context
 ```typescript
-// Base Flow Component
-interface FlowProps {
-  template: Template;
-  onComplete: (data: FlowData) => void;
-  onError: (error: Error) => void;
+interface AuthContextType {
+  user: UserProfile | null;
+  loading: boolean;
+  isImpersonating: boolean;
+  impersonatedUser: UserProfile | null;
+  originalAdminUser: UserProfile | null;
+  role: UserRole;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  impersonateUser: (userId: string) => Promise<void>;
+  stopImpersonating: () => Promise<void>;
 }
 
-// Onboarding Flow
-const OnboardingFlow: React.FC<FlowProps> = ({
-  template,
-  onComplete,
-  onError
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
+  children 
 }) => {
-  const [state, setState] = useState<OnboardingState>(initialState);
-  
-  // Flow-specific logic
-  const handleSectionComplete = async (sectionId: string, data: any) => {
-    await saveProgress(sectionId, data);
-    proceedToNextSection();
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [impersonatedUser, setImpersonatedUser] = useState<UserProfile | null>(null);
+  const [originalAdminUser, setOriginalAdminUser] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    // Subscribe to auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          const { data: profile } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          setUser(profile);
+        } else {
+          setUser(null);
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const impersonateUser = async (userId: string) => {
+    if (user?.role !== 'admin') {
+      throw new Error('Only admins can impersonate users');
+    }
+
+    const { data: targetUser } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (!targetUser) {
+      throw new Error('User not found');
+    }
+
+    setOriginalAdminUser(user);
+    setImpersonating(true);
+    setImpersonatedUser(targetUser);
   };
-  
+
+  const stopImpersonating = async () => {
+    if (!isImpersonating || !originalAdminUser) {
+      throw new Error('Not currently impersonating');
+    }
+
+    setUser(originalAdminUser);
+    setImpersonating(false);
+    setImpersonatedUser(null);
+    setOriginalAdminUser(null);
+  };
+
+  const value = {
+    user: isImpersonating ? impersonatedUser : user,
+    loading,
+    isImpersonating,
+    impersonatedUser,
+    originalAdminUser,
+    role: isImpersonating ? impersonatedUser?.role ?? 'user' : user?.role ?? 'user',
+    signIn: async (email, password) => {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      if (error) throw error;
+    },
+    signUp: async (email, password) => {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password
+      });
+      if (error) throw error;
+    },
+    signOut: async () => {
+      if (isImpersonating) {
+        await stopImpersonating();
+      }
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    },
+    resetPassword: async (email) => {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) throw error;
+    },
+    impersonateUser,
+    stopImpersonating
+  };
+
   return (
-    <FlowErrorBoundary>
-      <SectionRenderer
-        section={currentSection}
-        onComplete={handleSectionComplete}
-        onSkip={handleSkipSection}
-      />
-    </FlowErrorBoundary>
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
   );
 };
+```
 
-// Questionnaire Flow
-const QuestionnaireFlow: React.FC<FlowProps> = ({
-  template,
-  onComplete,
-  onError
+### Role-Based Protected Routes
+```typescript
+interface RoleBasedRouteProps {
+  children: React.ReactNode;
+  requiredRole?: UserRole;
+}
+
+const RoleBasedRoute: React.FC<RoleBasedRouteProps> = ({ 
+  children, 
+  requiredRole = 'user' 
 }) => {
-  // Similar structure to OnboardingFlow but with
-  // questionnaire-specific logic
+  const { user, role, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (role !== requiredRole && role !== 'admin') {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  return <>{children}</>;
 };
 ```
 
-### Form Components
+### Admin Impersonation Bar
 ```typescript
-// Form Container
-interface FormContainerProps {
-  initialValues: Record<string, any>;
-  validationSchema: ValidationSchema;
-  onSubmit: (values: any) => Promise<void>;
-}
+const AdminImpersonationBar: React.FC = () => {
+  const { 
+    isImpersonating, 
+    impersonatedUser, 
+    originalAdminUser,
+    stopImpersonating 
+  } = useAuth();
 
-// Question Types
-type QuestionType = 
-  | 'text'
-  | 'email'
-  | 'number'
-  | 'select'
-  | 'multiselect'
-  | 'checkbox'
-  | 'radio';
+  if (!isImpersonating) {
+    return null;
+  }
 
-// Question Component
-interface QuestionProps {
-  type: QuestionType;
-  value: any;
-  onChange: (value: any) => void;
-  validation?: ValidationRule[];
-}
-```
-
-### Navigation Components
-```typescript
-interface NavigationProps {
-  currentStep: number;
-  totalSteps: number;
-  onNext: () => void;
-  onBack: () => void;
-  canProceed: boolean;
-}
-
-const NavigationControls: React.FC<NavigationProps> = (props) => {
-  // Navigation logic
+  return (
+    <div className="fixed top-0 left-0 right-0 h-12 bg-yellow-500 flex items-center justify-between px-4 text-black">
+      <div>
+        Viewing as: {impersonatedUser?.email} (Role: {impersonatedUser?.role})
+      </div>
+      <div className="flex items-center space-x-4">
+        <span>Admin: {originalAdminUser?.email}</span>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={stopImpersonating}
+        >
+          Stop Impersonating
+        </Button>
+      </div>
+    </div>
+  );
 };
 ```
 
-## State Management
+## Database Integration
 
-### Form State
+### User Profile Schema
 ```typescript
-interface FormState {
-  values: Record<string, any>;
-  errors: Record<string, string>;
-  touched: Record<string, boolean>;
-  isSubmitting: boolean;
-}
-
-const useFormState = (config: FormConfig) => {
-  const [state, setState] = useState<FormState>(initialState);
-  
-  // Form state management
-  const handleChange = (field: string, value: any) => {
-    setState(prev => ({
-      ...prev,
-      values: { ...prev.values, [field]: value }
-    }));
-  };
-  
-  return {
-    ...state,
-    handleChange,
-    handleBlur,
-    handleSubmit
-  };
-};
-```
-
-### Progress State
-```typescript
-interface ProgressState {
-  currentStep: number;
-  completedSteps: string[];
-  skippedSteps: string[];
-  responses: Record<string, any>;
-}
-
-const useProgress = () => {
-  const [progress, setProgress] = useState<ProgressState>(initialProgress);
-  
-  // Progress tracking
-  const markStepComplete = (stepId: string) => {
-    setProgress(prev => ({
-      ...prev,
-      completedSteps: [...prev.completedSteps, stepId]
-    }));
-  };
-  
-  return {
-    progress,
-    markStepComplete,
-    markStepSkipped,
-    canProceed
-  };
-};
-```
-
-## Validation System
-
-### Rules
-```typescript
-interface ValidationRule {
-  type: 'required' | 'pattern' | 'custom';
-  message: string;
-  validate: (value: any) => boolean;
-}
-
-const useValidation = (rules: ValidationRule[]) => {
-  const validate = (value: any) => {
-    for (const rule of rules) {
-      const isValid = rule.validate(value);
-      if (!isValid) {
-        return { isValid: false, message: rule.message };
-      }
-    }
-    return { isValid: true };
-  };
-  
-  return { validate };
-};
-```
-
-### Skip Section Logic
-```typescript
-const handleSkipSection = (sectionId: string) => {
-  if (!canSkipSection(sectionId)) return;
-  
-  markSectionSkipped(sectionId);
-  proceedToNextSection();
-};
-
-const canSkipSection = (sectionId: string): boolean => {
-  const section = sections.find(s => s.id === sectionId);
-  return section?.canSkip && !section?.isRequired;
-};
-```
-
-## Data Flow
-
-### Template Loading
-```typescript
-interface Template {
+interface UserProfile {
   id: string;
-  type: 'onboarding' | 'questionnaire';
-  sections: Section[];
-  settings: TemplateSettings;
+  email: string;
+  role: UserRole;
+  created_at: string;
+  updated_at: string;
+  metadata?: Record<string, unknown>;
 }
 
-const useTemplate = (templateId: string) => {
-  const [template, setTemplate] = useState<Template | null>(null);
-  
-  useEffect(() => {
-    const loadTemplate = async () => {
-      const { data, error } = await supabase
-        .from('templates')
-        .select()
-        .eq('id', templateId)
-        .single();
-        
-      if (error) throw error;
-      setTemplate(data);
-    };
-    
-    loadTemplate();
-  }, [templateId]);
-  
-  return template;
-};
+type UserRole = 'user' | 'admin';
 ```
 
-### Response Handling
-```typescript
-interface Response {
-  id: string;
-  templateId: string;
-  userId: string;
-  answers: Record<string, any>;
-  completedAt?: string;
-}
+### Role-Based Security Policies
+```sql
+-- Enable RLS
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
-const useResponses = () => {
-  const saveResponse = async (response: Partial<Response>) => {
-    const { data, error } = await supabase
-      .from('responses')
-      .insert(response);
-      
-    if (error) throw error;
-    return data;
-  };
-  
-  return {
-    saveResponse,
-    loadResponses,
-    updateResponse
-  };
-};
+-- Admin can read all users
+CREATE POLICY "Admins can read all user profiles"
+  ON users
+  FOR SELECT
+  USING (
+    auth.uid() IN (
+      SELECT id FROM users WHERE role = 'admin'
+    )
+  );
+
+-- Users can read own profile
+CREATE POLICY "Users can read own profile"
+  ON users
+  FOR SELECT
+  USING (auth.uid() = id);
+
+-- Admin can update all users
+CREATE POLICY "Admins can update all user profiles"
+  ON users
+  FOR UPDATE
+  USING (
+    auth.uid() IN (
+      SELECT id FROM users WHERE role = 'admin'
+    )
+  );
+
+-- Users can update own profile
+CREATE POLICY "Users can update own profile"
+  ON users
+  FOR UPDATE
+  USING (auth.uid() = id);
 ```
 
 ## Error Handling
 
-### Error Boundaries
+### Auth Errors
 ```typescript
-class FlowErrorBoundary extends React.Component<ErrorBoundaryProps> {
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    logError(error, info);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return <ErrorDisplay error={this.state.error} />;
-    }
-    return this.props.children;
+class AuthError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public details?: unknown
+  ) {
+    super(message);
+    this.name = 'AuthError';
   }
 }
-```
 
-### API Error Handling
-```typescript
-interface ApiError extends Error {
-  code: string;
-  details?: any;
-}
-
-const handleApiError = (error: ApiError) => {
+const handleAuthError = (error: AuthError) => {
   switch (error.code) {
-    case 'VALIDATION_ERROR':
-      return { message: 'Please check your input' };
-    case 'NETWORK_ERROR':
-      return { message: 'Connection lost' };
+    case 'invalid_credentials':
+      return 'Invalid email or password';
+    case 'email_taken':
+      return 'Email already registered';
+    case 'unauthorized_role':
+      return 'You do not have permission to perform this action';
+    case 'impersonation_error':
+      return 'Unable to impersonate user';
     default:
-      return { message: 'An unexpected error occurred' };
+      return 'An unexpected error occurred';
   }
 };
 ```
 
-## Performance Optimization
+## Security Considerations
 
-### Component Optimization
-```typescript
-// Memoized Components
-const MemoizedQuestion = React.memo(Question, (prev, next) => {
-  return prev.value === next.value && prev.error === next.error;
-});
+1. **Authentication**
+   - Email confirmation required
+   - Password strength requirements
+   - Rate limiting on auth endpoints
+   - Secure session management
 
-// Lazy Loading
-const LazyFlow = React.lazy(() => import('./components/Flow'));
-```
+2. **Authorization**
+   - Role-based access control
+   - Protected routes by role
+   - Admin impersonation tracking
+   - Session validation
 
-### Data Caching
-```typescript
-const useDataCache = () => {
-  const cache = new Map<string, { data: any; timestamp: number }>();
-  
-  const set = (key: string, data: any) => {
-    cache.set(key, { data, timestamp: Date.now() });
-  };
-  
-  const get = (key: string) => {
-    const item = cache.get(key);
-    if (!item) return null;
-    
-    if (Date.now() - item.timestamp > 5 * 60 * 1000) {
-      cache.delete(key);
-      return null;
-    }
-    
-    return item.data;
-  };
-  
-  return { set, get };
-};
-```
+3. **Data Protection**
+   - Row Level Security (RLS)
+   - Role-based policies
+   - Audit logging
+   - Data encryption
 
-## Security
-
-### Input Validation
-```typescript
-const validateInput = (value: any, rules: ValidationRule[]) => {
-  for (const rule of rules) {
-    const isValid = rule.validate(value);
-    if (!isValid) {
-      return { isValid: false, message: rule.message };
-    }
-  }
-  return { isValid: true };
-};
-```
-
-### Data Access Control
-```typescript
-// Row Level Security Policies
-const setupRLS = () => {
-  // Templates RLS
-  sql`
-    alter table templates enable row level security;
-    
-    create policy "Read published templates"
-      on templates for select
-      using (status = 'published');
-      
-    create policy "Manage own templates"
-      on templates for all
-      using (auth.uid() = user_id);
-  `;
-  
-  // Responses RLS
-  sql`
-    alter table responses enable row level security;
-    
-    create policy "Manage own responses"
-      on responses for all
-      using (auth.uid() = user_id);
-  `;
-};
-```
+4. **Impersonation Security**
+   - Admin-only access
+   - Clear visual indicators
+   - Audit trail
+   - Session isolation
 
 ## Best Practices
 
-1. **Component Design**
-   - Single responsibility principle
-   - Proper prop typing
-   - Error boundary implementation
-   - Loading state handling
+1. **Auth State Management**
+   - Use AuthContext for global state
+   - Handle loading states
+   - Proper error handling
+   - Clear error messages
 
-2. **State Management**
-   - Appropriate state scoping
-   - Consistent state updates
-   - Side effect handling
-   - Error state management
+2. **Role Management**
+   - Check roles consistently
+   - Use type-safe role checks
+   - Handle role changes
+   - Validate permissions
 
-3. **Performance**
-   - Component memoization
-   - Lazy loading
-   - Data caching
-   - Bundle optimization
+3. **Impersonation**
+   - Clear user feedback
+   - Maintain admin access
+   - Proper state cleanup
+   - Error handling
 
 4. **Security**
-   - Input validation
-   - Data access control
-   - Error handling
-   - Secure data storage
-
-## Troubleshooting Guide
-
-1. **Common Issues**
-   - Form validation not triggering
-   - Progress not saving
-   - Navigation issues
-   - State synchronization problems
-
-2. **Solutions**
-   - Check validation rules implementation
-   - Verify progress saving mechanism
-   - Debug navigation guards
-   - Review state management implementation
+   - Validate permissions server-side
+   - Apply proper RLS policies
+   - Audit sensitive actions
+   - Secure data access
