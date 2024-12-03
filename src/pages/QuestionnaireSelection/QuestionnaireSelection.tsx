@@ -88,3 +88,6 @@ export const QuestionnaireSelection: React.FC = () => {
       </div>
     </div>
   );
+};
+
+export default QuestionnaireSelection;
